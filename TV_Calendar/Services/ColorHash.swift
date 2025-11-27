@@ -1,3 +1,11 @@
+//
+//  ColorHash.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 26/11/2025.
+//
+
+
 import SwiftUI
 
 // --- EXTENSIONS POUR LES DATES ---
@@ -40,14 +48,18 @@ extension Date {
     
     // Obtenir les 7 jours de la semaine autour de la date
     func weekDays() -> [Date] {
-        let calendar = Calendar.current
-        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: self))!
-        // startOfWeek est souvent Dimanche aux USA, on ajoute 1 jour pour Lundi si besoin, ou on configure le calendrier.
-        // Ici on suppose le calendrier par défaut (souvent Lundi en France).
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2 // 1 = Dimanche, 2 = Lundi. On FORCE le Lundi.
+        calendar.locale = Locale(identifier: "fr_FR") // On force le contexte français
+        
+        // On cherche le début de la semaine pour la date actuelle
+        guard let interval = calendar.dateInterval(of: .weekOfYear, for: self) else { return [] }
+        let startOfWeek = interval.start
         
         var days: [Date] = []
         for i in 0..<7 {
-            if let date = calendar.date(byAdding: .day, value: i + 1, to: startOfWeek) { // +1 pour caler Lundi
+            // On ajoute 0 jour, puis 1, puis 2... à partir du Lundi
+            if let date = calendar.date(byAdding: .day, value: i, to: startOfWeek) {
                 days.append(date)
             }
         }

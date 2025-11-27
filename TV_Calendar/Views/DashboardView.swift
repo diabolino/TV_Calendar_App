@@ -1,3 +1,11 @@
+//
+//  DashboardView.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 26/11/2025.
+//
+
+
 import SwiftUI
 import SwiftData
 
@@ -45,17 +53,33 @@ struct DashboardView: View {
                         )
                     }
                     
-                    // --- HEATMAP (Version simplifiée : Activité récente) ---
-                    VStack(alignment: .leading) {
-                        Text("Activité récente")
+                    // --- HEATMAP (Activité réelle) ---
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Activité récente (7 jours)")
                             .font(.headline)
                             .foregroundColor(.white)
                         
-                        HStack {
-                            ForEach(0..<7) { day in
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.accentPurple.opacity(Double.random(in: 0.1...0.8))) // Fake data pour l'instant
-                                    .frame(height: 30)
+                        HStack(spacing: 8) {
+                            // On génère les 7 derniers jours
+                            ForEach(getLast7Days(), id: \.self) { date in
+                                VStack {
+                                    // Le bloc de couleur
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(getColorForActivity(date: date))
+                                        .frame(height: 40)
+                                        .overlay(
+                                            // Affiche le nombre si > 0
+                                            Text(getCountFor(date: date) > 0 ? "\(getCountFor(date: date))" : "")
+                                                .font(.caption2).bold()
+                                                .foregroundColor(.white.opacity(0.8))
+                                        )
+                                    
+                                    // Le jour (Lun, Mar...)
+                                    Text(date.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "fr_FR"))))
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                        .textCase(.uppercase)
+                                }
                             }
                         }
                     }
@@ -70,27 +94,40 @@ struct DashboardView: View {
                             .foregroundColor(.white)
                             .padding(.bottom, 8)
                         
-                        ForEach(upcomingEpisodes.prefix(3)) { ep in
-                            HStack {
-                                AsyncImage(url: URL(string: ep.show?.imageUrl ?? "")) { img in
-                                    img.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: { Color.gray }
-                                .frame(width: 50, height: 70)
-                                .cornerRadius(6)
-                                
-                                VStack(alignment: .leading) {
-                                    Text(ep.show?.name ?? "")
-                                        .font(.caption).bold().foregroundColor(.secondary)
-                                    Text(ep.title)
-                                        .font(.body).foregroundColor(.white).lineLimit(1)
-                                    Text(ep.airDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
-                                        .font(.caption).foregroundColor(.blue)
+                        if upcomingEpisodes.isEmpty {
+                            Text("Aucun épisode prévu cette semaine")
+                                .font(.caption)
+                                .italic()
+                                .foregroundColor(.gray)
+                        } else {
+                            ForEach(upcomingEpisodes.prefix(3)) { ep in
+                                HStack {
+                                    // --- CORRECTION ICI : PosterImage avec Cache ---
+                                    PosterImage(urlString: ep.show?.imageUrl, width: 50, height: 70)
+                                        .cornerRadius(6)
+                                    // -----------------------------------------------
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text(ep.show?.name ?? "")
+                                            .font(.caption)
+                                            .bold()
+                                            .foregroundColor(.secondary)
+                                        
+                                        Text(ep.title)
+                                            .font(.body)
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                        
+                                        Text(ep.airDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                    Spacer()
                                 }
-                                Spacer()
+                                .padding(8)
+                                .background(Color.cardBackground)
+                                .cornerRadius(8)
                             }
-                            .padding(8)
-                            .background(Color.cardBackground)
-                            .cornerRadius(8)
                         }
                     }
                 }
@@ -98,7 +135,9 @@ struct DashboardView: View {
             }
             .background(Color.appBackground)
             .navigationTitle("Tableau de bord")
+            #if os(iOS)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
         }
     }
     
@@ -135,6 +174,41 @@ struct DashboardView: View {
         episodes
             .filter { ($0.airDate ?? Date.distantPast) >= Date() }
             .sorted { ($0.airDate ?? Date.distantFuture) < ($1.airDate ?? Date.distantFuture) }
+    }
+    
+    // --- LOGIQUE HEATMAP ---
+        
+    // Récupère les 7 derniers jours (d'hier à il y a 6 jours + Aujourd'hui)
+    func getLast7Days() -> [Date] {
+        let calendar = Calendar.current
+        let today = Date()
+        // On crée un tableau de 0 à 6, et on recule d'autant de jours
+        return (0...6).map { i in
+            calendar.date(byAdding: .day, value: -i, to: today)!
+        }.reversed() // Pour avoir l'ordre chronologique (Il y a 7 jours -> Aujourd'hui)
+    }
+    
+    // Compte les épisodes vus à cette date précise
+    func getCountFor(date: Date) -> Int {
+        episodes.filter { episode in
+            guard let wDate = episode.watchedDate else { return false }
+            return Calendar.current.isDate(wDate, inSameDayAs: date)
+        }.count
+    }
+    
+    // Génère la couleur (Plus c'est vu, plus c'est violet brillant)
+    func getColorForActivity(date: Date) -> Color {
+        let count = getCountFor(date: date)
+        
+        if count == 0 {
+            return Color.white.opacity(0.05) // Gris très sombre (vide)
+        } else if count <= 2 {
+            return Color.accentPurple.opacity(0.4) // Un peu vu
+        } else if count <= 5 {
+            return Color.accentPurple.opacity(0.7) // Bien vu
+        } else {
+            return Color.accentPurple // Binge watching !
+        }
     }
 }
 
@@ -177,3 +251,4 @@ struct StatCard: View {
         .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 4)
     }
 }
+

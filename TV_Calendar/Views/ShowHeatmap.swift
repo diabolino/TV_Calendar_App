@@ -1,78 +1,183 @@
+//
+//  ShowHeatmap.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 27/11/2025.
+//
+
+
 import SwiftUI
 
 struct ShowHeatmap: View {
     let show: TVShow
     let episodes: [Episode]
     
-    // On filtre pour n'avoir que la saison en cours ou pertinente
-    var currentSeasonEpisodes: [Episode] {
-        // On cherche la première saison qui a des épisodes non vus
-        let firstUnwatched = episodes.first(where: { !$0.isWatched })
-        let seasonToShow = firstUnwatched?.season ?? (episodes.last?.season ?? 1)
-        return episodes.filter { $0.season == seasonToShow }.sorted { $0.number < $1.number }
+    // État pour le chargement manuel
+    @State private var isLoadingBanner = false
+    
+    // Affiche uniquement la saison "active"
+    var episodesToDisplay: [Episode] {
+        let sortedAll = episodes.sorted {
+            if $0.season == $1.season { return $0.number < $1.number }
+            return $0.season < $1.season
+        }
+        
+        if let firstUnwatched = sortedAll.first(where: { !$0.isWatched }) {
+            return sortedAll.filter { $0.season == firstUnwatched.season }
+        }
+        
+        if let lastEpisode = sortedAll.last {
+            return sortedAll.filter { $0.season == lastEpisode.season }
+        }
+        return []
     }
+    
+    var currentSeasonNumber: Int {
+        episodesToDisplay.first?.season ?? 1
+    }
+    
+    let columns = [
+        GridItem(.adaptive(minimum: 24, maximum: 30), spacing: 4)
+    ]
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Image Série (Format Bannière)
-            ZStack(alignment: .bottomLeading) {
-                PosterImage(urlString: show.imageUrl, width: 100, height: 50)
-                    .overlay(Color.black.opacity(0.3))
-                    .cornerRadius(4)
-                
-                Text(show.name)
-                    .font(.caption2).bold().foregroundColor(.white)
-                    .padding(4)
-                    .lineLimit(1)
-            }
+        VStack(spacing: 0) {
             
-            // Badges Qualité / Saison
-            VStack(alignment: .leading, spacing: 4) {
-                // Qualité
-                Text(show.quality.rawValue)
-                    .font(.system(size: 8, weight: .bold))
-                    .padding(.horizontal, 4).padding(.vertical, 2)
-                    .background(qualityColor(show.quality).opacity(0.2))
-                    .foregroundColor(qualityColor(show.quality))
-                    .cornerRadius(2)
-                
-                // Saison actuelle
-                if let first = currentSeasonEpisodes.first {
-                    Text("S\(first.season)")
-                        .font(.caption2).bold().foregroundColor(.gray)
+            // --- BANNIÈRE ---
+            ZStack(alignment: .center) {
+                if let banner = show.bannerUrl {
+                    PosterImage(urlString: banner, width: nil, height: 70)
+                        .overlay(Color.black.opacity(0.1))
+                } else {
+                    ZStack {
+                        Color.accentPurple.opacity(0.3)
+                        Text(show.name).font(.headline).bold().foregroundColor(.white)
+                    }
+                    .frame(height: 70)
                 }
-            }
-            
-            // La Grille Heatmap (Scrollable horizontalement)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(currentSeasonEpisodes) { ep in
-                        EpisodeHeatmapCell(episode: ep)
+                
+                // Badges (Overlay)
+                VStack {
+                    HStack {
+                        Spacer()
+                        // Badge Saison
+                        Text("SAISON \(currentSeasonNumber)")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.black.opacity(0.6))
+                            .foregroundColor(.white.opacity(0.9))
+                            .cornerRadius(3)
+                    }
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        // Badge Qualité
+                        Text(show.quality.rawValue)
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(qualityColor(show.quality))
+                            .foregroundColor(.white)
+                            .cornerRadius(3)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(6)
+            }
+            .clipped()
+            
+            // --- GRILLE ÉPISODES ---
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(episodesToDisplay) { ep in
+                    HeatmapCell(episode: ep) {
+                        handleTap(on: ep)
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color.cardBackground)
+            
+            // --- BOUTON DE CHECK BANNIÈRE (Version 1.0 Finale) ---
+            if show.bannerUrl == nil {
+                // Cas 1 : Pas de bannière -> Bouton bien visible
+                Button(action: refreshBanner) {
+                    HStack {
+                        if isLoadingBanner {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Rechercher une bannière sur TVMaze")
+                        }
+                    }
+                    .font(.caption).bold()
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.accentPurple.opacity(0.3))
+                }
+            } else {
+                // Cas 2 : Bannière existe -> Menu contextuel discret (Appui long pour refresh)
+                // Ou petit bouton discret en bas si on veut le voir
+                /* Si vous voulez un bouton discret même quand y'a une image, décommentez ceci :
+                Button(action: refreshBanner) {
+                    Text("Actualiser l'image")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .padding(.vertical, 4)
+                }
+                */
             }
         }
-        .padding(8)
-        .background(Color.cardBackground)
         .cornerRadius(8)
-        
-        // Barre de progression globale en bas
-        .overlay(
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(Color.green)
-                    .frame(width: geo.size.width * progress(for: show), height: 2)
-            },
-            alignment: .bottomLeading
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        // Petit menu contextuel pour forcer le refresh même si l'image est là
+        .contextMenu {
+            Button {
+                refreshBanner()
+            } label: {
+                Label("Forcer la mise à jour image", systemImage: "arrow.clockwise")
+            }
+        }
     }
     
-    func progress(for show: TVShow) -> Double {
-        let total = Double(show.episodes.count); guard total > 0 else { return 0 }
-        let watched = Double(show.episodes.filter { $0.isWatched }.count)
-        return watched / total
+    // --- ACTIONS ---
+    
+    func refreshBanner() {
+        isLoadingBanner = true
+        Task {
+            // On appelle l'API pour récupérer les images fraiches
+            if let details = try? await TVMazeService.shared.fetchShowWithImages(id: show.tvmazeId) {
+                // On cherche la bannière
+                if let newBanner = TVMazeService.shared.extractBanner(from: details) {
+                    // On met à jour l'objet SwiftData (l'UI se mettra à jour toute seule)
+                    show.bannerUrl = newBanner
+                    print("✅ Bannière trouvée : \(newBanner)")
+                } else {
+                    print("⚠️ Toujours pas de bannière sur TVMaze")
+                }
+            }
+            // Petite pause pour voir le chargement
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            isLoadingBanner = false
+        }
+    }
+    
+    func handleTap(on targetEpisode: Episode) {
+        withAnimation(.snappy) {
+            if !targetEpisode.isWatched {
+                for ep in episodesToDisplay {
+                    if ep.number <= targetEpisode.number {
+                        if !ep.isWatched {
+                            ep.isWatched = true
+                            ep.watchedDate = Date()
+                        }
+                    }
+                }
+            } else {
+                targetEpisode.isWatched = false
+                targetEpisode.watchedDate = nil
+            }
+        }
     }
     
     func qualityColor(_ q: VideoQuality) -> Color {
@@ -82,21 +187,28 @@ struct ShowHeatmap: View {
     }
 }
 
-struct EpisodeHeatmapCell: View {
+struct HeatmapCell: View {
     let episode: Episode
+    let action: () -> Void
     
-    var color: Color {
-        if episode.isWatched { return .green } // Vu
-        if let airDate = episode.airDate, airDate <= Date() { return .orange } // Sorti mais pas vu
-        return .gray.opacity(0.3) // Futur
+    var statusColor: Color {
+        if episode.isWatched { return .green }
+        if let date = episode.airDate, date <= Date() { return .orange }
+        return .gray.opacity(0.3)
     }
     
     var body: some View {
-        Text("\(episode.number)")
-            .font(.system(size: 9, weight: .bold))
-            .frame(width: 20, height: 20)
-            .background(color)
-            .foregroundColor(.white) // Texte blanc pour lisibilité
+        Rectangle()
+            .fill(statusColor)
+            .aspectRatio(1, contentMode: .fit)
+            .overlay(
+                Text("\(episode.number)")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+            )
             .cornerRadius(2)
+            .onTapGesture {
+                action()
+            }
     }
 }

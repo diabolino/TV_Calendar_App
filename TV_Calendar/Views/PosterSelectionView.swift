@@ -1,3 +1,11 @@
+//
+//  PosterSelectionView.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 27/11/2025.
+//
+
+
 import SwiftUI
 
 struct PosterSelectionView: View {

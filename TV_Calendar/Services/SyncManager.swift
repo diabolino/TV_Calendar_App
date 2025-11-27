@@ -1,3 +1,11 @@
+//
+//  SyncManager.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 26/11/2025.
+//
+
+
 import Foundation
 import SwiftData
 
@@ -17,7 +25,7 @@ class SyncManager {
             if localShows.isEmpty { return }
             
             // 2. Récupérer la liste des mises à jour globales depuis TVMaze (1 seul appel)
-            let updatesMap = try await APIService.shared.fetchUpdates()
+            let updatesMap = try await TVMazeService.shared.fetchUpdates()
             
             var showsToUpdate: [TVShow] = []
             
@@ -48,25 +56,101 @@ class SyncManager {
         }
     }
     
-    // Met à jour une seule série (Récupère les nouveaux épisodes)
     @MainActor
     private func updateShowSchedule(show: TVShow, context: ModelContext) async {
         print("   -> Mise à jour de : \(show.name)")
         
-        // 1. On récupère les épisodes à jour
-        if let episodes = try? await APIService.shared.fetchEpisodes(showId: show.tvmazeId) {
-            let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
+        guard let episodesDTO = try? await TVMazeService.shared.fetchEpisodes(showId: show.tvmazeId) else { return }
+        
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
+        
+        var tmdbId: Int? = nil
+        
+        // --- LOGIQUE MISE À JOUR TBA & STATUS ---
+        // CORRECTION : ?? []
+        let safeEpisodes = show.episodes ?? []
+        let existingEpisodesDict = Dictionary(grouping: safeEpisodes, by: { $0.tvmazeId })
+        
+        // On vérifie si on a besoin de récupérer les infos détaillées (pour l'IMDb ID ou update status)
+        let needsDetailedInfo = episodesDTO.contains { dto in
+            if existingEpisodesDict[dto.id] == nil { return true } // Nouvel épisode
+            if let existing = existingEpisodesDict[dto.id]?.first, existing.title == "TBA" && dto.name != "TBA" { return true } // Update TBA
+            return false
+        }
+        
+        if needsDetailedInfo {
+            // On récupère la fiche série à jour
+            if let details = try? await TVMazeService.shared.fetchShow(id: show.tvmazeId) {
+                
+                // 1. CORRECTION DU WARNING : On utilise les données pour mettre à jour la série
+                show.status = details.status
+                show.network = details.network?.name ?? details.webChannel?.name
+                // (Optionnel) show.imageUrl = details.image?.original ... si on voulait mettre à jour l'image
+                
+                // 2. On récupère l'IMDb ID pour la traduction
+                if let imdb = details.externals?.imdb {
+                    if let tmdbResult = try? await TMDBService.shared.findShowByExternalId(imdbId: imdb) {
+                        tmdbId = tmdbResult.id
+                    }
+                }
+            }
+        }
+        
+        // --- SUITE DU CODE (Inchangé) ---
+        let episodesBySeason = Dictionary(grouping: episodesDTO, by: { $0.season })
+        
+        for (seasonNum, seasonEpisodes) in episodesBySeason {
             
-            // On récupère les IDs des épisodes déjà existants pour ne pas faire de doublons
-            let existingEpisodeIDs = Set(show.episodes.map { $0.tvmazeId })
+            var frenchOverviews: [Int: String] = [:]
+            var englishOverviews: [Int: String] = [:]
             
-            for epDTO in episodes {
-                // Si l'épisode n'existe pas encore, on le crée
-                if !existingEpisodeIDs.contains(epDTO.id) {
-                    let date = epDTO.airdate != nil ? formatter.date(from: epDTO.airdate!) : nil
+            if let tId = tmdbId {
+                if let frSeason = try? await TMDBService.shared.fetchSeasonDetails(tmdbShowId: tId, seasonNumber: seasonNum, language: "fr-FR") {
+                    for ep in frSeason.episodes { if let ov = ep.overview, !ov.isEmpty { frenchOverviews[ep.episode_number] = ov } }
+                }
+                if seasonEpisodes.count > frenchOverviews.count {
+                    if let enSeason = try? await TMDBService.shared.fetchSeasonDetails(tmdbShowId: tId, seasonNumber: seasonNum, language: "en-US") {
+                        for ep in enSeason.episodes { if let ov = ep.overview, !ov.isEmpty { englishOverviews[ep.episode_number] = ov } }
+                    }
+                }
+            }
+            
+            for epDTO in seasonEpisodes {
+                let date = epDTO.airdate != nil ? formatter.date(from: epDTO.airdate!) : nil
+                
+                if let existingEp = existingEpisodesDict[epDTO.id]?.first {
+                    // Update TBA
+                    if existingEp.title == "TBA" && epDTO.name != "TBA" {
+                        print("      ♻️ Update TBA : \(epDTO.name)")
+                        existingEp.title = epDTO.name
+                        existingEp.airDate = date
+                        existingEp.runtime = epDTO.runtime
+                        
+                        let (overview, isTranslated) = await getSmartOverview(
+                            epNumber: epDTO.number,
+                            originalSummary: epDTO.summary,
+                            frenchDict: frenchOverviews,
+                            englishDict: englishOverviews
+                        )
+                        existingEp.overview = overview
+                        existingEp.isAutoTranslated = isTranslated
+                    }
+                    // Update Date
+                    else if existingEp.airDate != date {
+                        existingEp.airDate = date
+                        print("      🗓️ Date changée pour S\(epDTO.season)E\(epDTO.number)")
+                    }
+                } else {
+                    // Nouvel épisode
+                    print("      + Nouveau : S\(epDTO.season)E\(epDTO.number)")
                     
-                    // Note: Ici on pourrait remettre la logique de traduction intelligente
-                    // Pour simplifier l'exemple, je mets le basique
+                    let (overview, isTranslated) = await getSmartOverview(
+                        epNumber: epDTO.number,
+                        originalSummary: epDTO.summary,
+                        frenchDict: frenchOverviews,
+                        englishDict: englishOverviews
+                    )
+                    
                     let newEp = Episode(
                         tvmazeId: epDTO.id,
                         title: epDTO.name,
@@ -74,29 +158,41 @@ class SyncManager {
                         number: epDTO.number,
                         airDate: date,
                         runtime: epDTO.runtime,
-                        overview: epDTO.summary // Ou logique de trad...
+                        overview: overview
                     )
                     
+                    newEp.isAutoTranslated = isTranslated
                     newEp.id = "\(show.uuid)-\(epDTO.id)"
                     newEp.show = show
                     context.insert(newEp)
                     
-                    // Notif si futur
                     if let d = newEp.airDate, d > Date() {
                         NotificationManager.shared.scheduleNotification(for: newEp)
-                    }
-                    print("      + Nouvel épisode : S\(epDTO.season)E\(epDTO.number)")
-                } else {
-                    // Optionnel : Mettre à jour la date de diffusion si elle a changé
-                    if let existingEp = show.episodes.first(where: { $0.tvmazeId == epDTO.id }) {
-                        let newDate = epDTO.airdate != nil ? formatter.date(from: epDTO.airdate!) : nil
-                        if existingEp.airDate != newDate {
-                            existingEp.airDate = newDate
-                            print("      ~ Date modifiée pour S\(epDTO.season)E\(epDTO.number)")
-                        }
                     }
                 }
             }
         }
+    }
+    
+    // Helper pour ne pas dupliquer la logique de traduction
+    private func getSmartOverview(epNumber: Int, originalSummary: String?, frenchDict: [Int: String], englishDict: [Int: String]) async -> (String, Bool) {
+        
+        // 1. Priorité TMDB FR
+        if let fr = frenchDict[epNumber] {
+            return (fr, false)
+        }
+        
+        // 2. Fallback Anglais (TMDB EN ou TVMaze) -> Traduction
+        let sourceText = englishDict[epNumber] ?? originalSummary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression) ?? ""
+        
+        if !sourceText.isEmpty {
+            if let translated = await TranslationService.shared.translate(text: sourceText) {
+                return (translated, true) // Traduit !
+            } else {
+                return (sourceText, true) // Echec trad, on garde l'anglais avec le flag
+            }
+        }
+        
+        return ("", false)
     }
 }

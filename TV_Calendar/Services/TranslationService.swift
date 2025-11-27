@@ -1,11 +1,18 @@
+//
+//  TranslationService.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 26/11/2025.
+//
+
+
 import Foundation
 
 struct TranslationService {
     static let shared = TranslationService()
     
-    // On utilise une instance publique de LibreTranslate (Attention aux limites)
-    // Idéalement, remplacez par votre propre serveur si vous en avez un (comme sur le repo original)
-    private let baseURL = "https://translate.argosopentech.com/translate" 
+    // Votre instance privée LibreTranslate
+    private let baseURL = "https://darkdiablo.net/translate"
     
     struct TranslationResponse: Decodable {
         let translatedText: String
@@ -17,6 +24,9 @@ struct TranslationService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Si jamais vous ajoutez une API Key sur votre serveur plus tard, décommentez ceci :
+        // request.setValue("VOTRE_API_KEY", forHTTPHeaderField: "X-API-Key")
         
         let body: [String: Any] = [
             "q": text,
@@ -30,9 +40,9 @@ struct TranslationService {
             
             let (data, response) = try await URLSession.shared.data(for: request)
             
-            // Vérification simple du statut HTTP
+            // Vérification du statut HTTP
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-                print("⚠️ Erreur Traduction API: \(httpResponse.statusCode)")
+                print("⚠️ Erreur Traduction (Status \(httpResponse.statusCode)) sur \(baseURL)")
                 return nil
             }
             
@@ -40,7 +50,7 @@ struct TranslationService {
             return result.translatedText
             
         } catch {
-            print("❌ Erreur Traduction: \(error)")
+            print("❌ Erreur connexion Traduction: \(error)")
             return nil
         }
     }

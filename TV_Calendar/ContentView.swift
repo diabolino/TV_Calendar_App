@@ -9,58 +9,59 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) var sizeClass
+    #endif
+    
+    // On force le mode sombre pour toute l'app
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
+        Group {
+            #if os(macOS)
+                SidebarView()
+            #else
+                if sizeClass == .compact {
+                    TabNavigationView()
+                } else {
+                    SidebarView()
                 }
-                .onDelete(perform: deleteItems)
-            }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
+            #endif
         }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
-        }
+        .preferredColorScheme(.dark) // FORCE LE DARK MODE
     }
 }
 
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+struct TabNavigationView: View {
+    
+    // Customisation de la TabBar pour qu'elle soit sombre
+    #if os(iOS)
+    init() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        // On utilise UIColor que sur iOS. Sur Mac ce code sera ignoré.
+        appearance.backgroundColor = UIColor(Color.appBackground)
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+    #endif
+    
+    var body: some View {
+        TabView {
+            // Onglet 1 : À Voir (Nouveau !)
+            ToWatchView()
+                .tabItem { Label("À voir", systemImage: "play.tv") }
+            
+            // Onglet 2 : Calendrier
+            CalendarView()
+                .tabItem { Label("Calendrier", systemImage: "calendar") }
+            
+            // Onglet 3 : Séries (Recherche/Bibliothèque)
+            SearchView()
+                .tabItem { Label("Séries", systemImage: "square.grid.2x2") }
+            
+            // Onglet 4 : Dashboard
+            DashboardView()
+                .tabItem { Label("Dashboard", systemImage: "chart.bar") }
+        }
+        .accentColor(Color.accentPurple) // Couleur des icones actives
+    }
 }

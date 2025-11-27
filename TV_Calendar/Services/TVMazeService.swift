@@ -1,5 +1,5 @@
 //
-//  APIService.swift
+//  TVMazeService.swift
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 26/11/2025.
@@ -7,8 +7,8 @@
 
 import Foundation
 
-struct APIService {
-    static let shared = APIService()
+struct TVMazeService {
+    static let shared = TVMazeService()
     private let baseURL = "https://api.tvmaze.com"
     
     // Structures pour décoder le JSON (DTO)
@@ -24,7 +24,8 @@ struct APIService {
         let status: String?
         let network: NetworkDTO?
         let webChannel: NetworkDTO?
-        let externals: ExternalsDTO? // <--- AJOUT
+        let externals: ExternalsDTO?
+        let _embedded: EmbeddedImagesDTO?
     }
     
     struct ExternalsDTO: Decodable {
@@ -38,6 +39,25 @@ struct APIService {
     struct ImageDTO: Decodable {
         let medium: String?
         let original: String?
+    }
+    
+    struct EmbeddedImagesDTO: Decodable {
+        let images: [ShowImageDTO]
+    }
+        
+    struct ShowImageDTO: Decodable {
+        let type: String
+        let resolutions: ImageResolutionsDTO
+    }
+    
+    struct ImageResolutionsDTO: Decodable {
+        let original: ImageResolutionDetailsDTO
+    }
+    
+    struct ImageResolutionDetailsDTO: Decodable {
+        let url: String
+        let width: Int
+        let height: Int
     }
     
     struct EpisodeDTO: Decodable {
@@ -104,5 +124,30 @@ struct APIService {
         guard let url = URL(string: "\(baseURL)/shows/\(id)") else { throw URLError(.badURL) }
         let (data, _) = try await URLSession.shared.data(from: url)
         return try JSONDecoder().decode(ShowDTO.self, from: data)
+    }
+    
+    // Récupère la série avec les images incluses
+    func fetchShowWithImages(id: Int) async throws -> ShowDTO {
+        guard let url = URL(string: "\(baseURL)/shows/\(id)?embed=images") else { throw URLError(.badURL) }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode(ShowDTO.self, from: data)
+    }
+    
+    // Helper pour extraire la bannière
+    func extractBanner(from dto: ShowDTO) -> String? {
+        guard let images = dto._embedded?.images else { return nil }
+        
+        // 1. Cherche la bannière exacte 758x140
+        if let specificBanner = images.first(where: {
+            $0.type == "banner" &&
+            $0.resolutions.original.width == 758 &&
+            $0.resolutions.original.height == 140
+        }) {
+            return specificBanner.resolutions.original.url
+        }
+        
+        // 2. Sinon n'importe quelle bannière
+        return images.first(where: { $0.type == "banner" })?.resolutions.original.url
     }
 }

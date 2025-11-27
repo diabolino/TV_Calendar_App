@@ -1,3 +1,11 @@
+//
+//  NotificationManager.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 26/11/2025.
+//
+
+
 import UserNotifications
 import Foundation
 
