@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CloudKit
 
 @main
 struct TV_CalendarApp: App {
@@ -17,46 +18,30 @@ struct TV_CalendarApp: App {
             CastMember.self,
         ])
         
-        // Configuration avec CloudKit activé et URL personnalisée
+        // Configuration STANDARD pour CloudKit
+        // On laisse SwiftData gérer tout automatiquement
         let modelConfiguration = ModelConfiguration(
             schema: schema,
-            url: URL.documentsDirectory.appending(path: "TVCalendar.sqlite"),
-            allowsSave: true,
-            cloudKitDatabase: .automatic
+            isStoredInMemoryOnly: false
+            // Pas de cloudKitDatabase: .none -> On veut la synchro !
         )
 
         do {
-            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            print("✅ ModelContainer créé avec succès (CloudKit activé)")
-            return container
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            // ⚠️ Si CloudKit échoue, on tente un fallback en mode local
-            print("❌ Erreur CloudKit : \(error.localizedDescription)")
-            print("🔄 Tentative de création en mode local uniquement...")
+            // Si ça plante ici, c'est souvent un "Schema Mismatch"
+            // L'astuce radicale pour les développeurs : supprimer les fichiers locaux
+            // ATTENTION : À ne faire qu'en phase de développement
+            print("❌ Erreur critique au chargement : \(error)")
             
-            // En cas d'erreur, on supprime la base et on recommence en local
-            let dbURL = URL.documentsDirectory.appending(path: "TVCalendar.sqlite")
-            try? FileManager.default.removeItem(at: dbURL)
-            try? FileManager.default.removeItem(at: dbURL.appendingPathExtension("shm"))
-            try? FileManager.default.removeItem(at: dbURL.appendingPathExtension("wal"))
-            print("🗑️ Ancienne base de données supprimée")
+            // On tente de nettoyer le dossier Application Support (là où SwiftData stocke par défaut)
+            let defaultURL = URL.applicationSupportDirectory.appending(path: "default.store")
+            try? FileManager.default.removeItem(at: defaultURL)
+            try? FileManager.default.removeItem(at: defaultURL.appendingPathExtension("shm"))
+            try? FileManager.default.removeItem(at: defaultURL.appendingPathExtension("wal"))
             
-            let fallbackConfig = ModelConfiguration(
-                schema: schema,
-                url: dbURL,
-                allowsSave: true,
-                cloudKitDatabase: .none
-            )
-            
-            do {
-                let container = try ModelContainer(for: schema, configurations: [fallbackConfig])
-                print("✅ ModelContainer créé en mode local")
-                return container
-            } catch {
-                // Si même le mode local échoue, c'est critique
-                print("❌ Erreur fatale : \(error)")
-                fatalError("Impossible de créer le conteneur de données : \(error)")
-            }
+            print("⚠️ Base de données locale supprimée pour tenter de réparer. Relancez l'app.")
+            fatalError("Crash volontaire pour reset : \(error)")
         }
     }()
 
@@ -67,9 +52,9 @@ struct TV_CalendarApp: App {
                     NotificationManager.shared.requestPermission()
                 }
                 .task {
+                    // Petite pause pour laisser l'UI charger
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    // Attention : Accéder à sharedModelContainer ici est risqué si l'init a échoué,
-                    // mais avec la correction ci-dessus, ça devrait passer.
+                    // Lancement de la synchro intelligente
                     await SyncManager.shared.synchronizeLibrary(modelContext: sharedModelContainer.mainContext)
                 }
         }

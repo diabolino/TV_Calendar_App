@@ -30,7 +30,7 @@ struct ToWatchView: View {
                     
                     Spacer()
                     
-                    // Sélecteur Custom (Style bouton)
+                    // Sélecteur Custom
                     HStack(spacing: 0) {
                         ForEach(ToWatchMode.allCases, id: \.self) { mode in
                             Button(action: { withAnimation { displayMode = mode } }) {
@@ -54,16 +54,18 @@ struct ToWatchView: View {
                 // --- CONTENU ---
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        if shows.isEmpty {
-                            ContentUnavailableView("Aucune série", systemImage: "tv.slash", description: Text("Ajoutez des séries pour voir votre progression."))
+                        
+                        // 1. ON FILTRE LES SÉRIES ICI
+                        let activeShows = shows.filter { hasReleasedUnwatchedEpisodes($0) }
+                        
+                        if activeShows.isEmpty {
+                            ContentUnavailableView("Vous êtes à jour !", systemImage: "checkmark.circle", description: Text("Aucun épisode en retard. Les futurs épisodes apparaîtront ici le jour de leur sortie."))
                                 .padding(.top, 50)
                         } else {
-                            // On filtre les séries actives
-                            let activeShows = shows.filter { hasNextEpisode($0) }
                             
                             ForEach(activeShows) { show in
                                 if displayMode == .list {
-                                    // VUE LISTE (Votre carte détaillée actuelle)
+                                    // VUE LISTE
                                     if let nextEp = nextEpisode(for: show) {
                                         NavigationLink(destination: ShowDetailView(show: show)) {
                                             ToWatchCard(
@@ -76,9 +78,8 @@ struct ToWatchView: View {
                                         .buttonStyle(.plain)
                                     }
                                 } else {
-                                    // VUE HEATMAP (La nouvelle vue compacte)
+                                    // VUE HEATMAP
                                     NavigationLink(destination: ShowDetailView(show: show)) {
-                                        // CORRECTION : show.episodes ?? []
                                         ShowHeatmap(show: show, episodes: show.episodes ?? [])
                                     }
                                     .buttonStyle(.plain)
@@ -90,33 +91,52 @@ struct ToWatchView: View {
                 }
             }
             .background(Color.appBackground)
-            .navigationTitle("") // On cache le titre natif car on a fait le nôtre
+            .navigationTitle("")
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
         }
     }
     
-    // Helpers
-    func hasNextEpisode(_ show: TVShow) -> Bool {
-            // CORRECTION : ?? []
-            (show.episodes ?? []).contains(where: { !$0.isWatched && $0.airDate != nil })
+    // --- HELPER DE FILTRAGE AMÉLIORÉ ---
+    func hasReleasedUnwatchedEpisodes(_ show: TVShow) -> Bool {
+        let safeEpisodes = show.episodes ?? []
+        let now = Date()
+        
+        // On garde la série SI il existe au moins un épisode qui :
+        // 1. N'est pas vu (!isWatched)
+        // 2. A une date de sortie (airDate != nil)
+        // 3. Est déjà sorti ou sort aujourd'hui (airDate <= now)
+        return safeEpisodes.contains { episode in
+            !episode.isWatched &&
+            (episode.airDate ?? Date.distantFuture) <= now
+        }
     }
     
     func nextEpisode(for show: TVShow) -> Episode? {
-        // CORRECTION : ?? []
-        (show.episodes ?? []).sorted { $0.season == $1.season ? $0.number < $1.number : $0.season < $1.season }
-            .first(where: { !$0.isWatched && $0.airDate != nil })
+        let safeEpisodes = show.episodes ?? []
+        // On cherche le prochain épisode À VOIR et DÉJÀ SORTI
+        return safeEpisodes.sorted {
+            $0.season == $1.season ? $0.number < $1.number : $0.season < $1.season
+        }
+        .first(where: { !$0.isWatched && ($0.airDate ?? Date.distantFuture) <= Date() })
     }
     
     func progress(for show: TVShow) -> Double {
-        let safeEpisodes = show.episodes ?? [] // CORRECTION
-        let total = Double(safeEpisodes.count)
+        let safeEpisodes = show.episodes ?? []
+        // Pour la barre de progression, on ne compte que les épisodes DÉJÀ SORTIS
+        // Sinon une série avec 20 épisodes futurs donnerait l'impression d'être à 0% alors qu'on est à jour
+        let releasedEpisodes = safeEpisodes.filter { ($0.airDate ?? Date.distantFuture) <= Date() }
+        
+        let total = Double(releasedEpisodes.count)
         guard total > 0 else { return 0 }
-        let watched = Double(safeEpisodes.filter { $0.isWatched }.count)
+        
+        let watched = Double(releasedEpisodes.filter { $0.isWatched }.count)
         return watched / total
     }
 }
+
+// (La struct ToWatchCard reste inchangée en bas)
 
 
 // --- CARTE CORRIGÉE (SIMPLIFIÉE) ---
