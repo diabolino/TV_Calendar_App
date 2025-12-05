@@ -45,8 +45,9 @@ struct TVMazeService {
         let images: [ShowImageDTO]
     }
         
+    // Structure Image CORRIGÉE
     struct ShowImageDTO: Decodable {
-        let type: String
+        let type: String? // <--- AJOUT DU ? ICI (Le type peut être null)
         let resolutions: ImageResolutionsDTO
     }
     
@@ -136,18 +137,39 @@ struct TVMazeService {
     
     // Helper pour extraire la bannière
     func extractBanner(from dto: ShowDTO) -> String? {
-        guard let images = dto._embedded?.images else { return nil }
+        guard let images = dto._embedded?.images else {
+            print("⚠️ Aucune image 'embedded' trouvée pour ID \(dto.id)")
+            return nil
+        }
         
-        // 1. Cherche la bannière exacte 758x140
-        if let specificBanner = images.first(where: {
+        // DEBUG : Voir ce qu'on reçoit
+        // print("🔎 Images trouvées pour \(dto.name): \(images.count)")
+        // for img in images { print("   - Type: \(img.type) | Size: \(img.resolutions.original.width)x\(img.resolutions.original.height)") }
+        
+        // 1. PRIORITÉ : On cherche la bannière standard (758x140)
+        if let perfectBanner = images.first(where: {
             $0.type == "banner" &&
             $0.resolutions.original.width == 758 &&
             $0.resolutions.original.height == 140
         }) {
-            return specificBanner.resolutions.original.url
+            return perfectBanner.resolutions.original.url
         }
         
-        // 2. Sinon n'importe quelle bannière
-        return images.first(where: { $0.type == "banner" })?.resolutions.original.url
+        // 2. PLAN B (Nouveau) : On cherche une bannière avec une largeur proche (entre 700 et 800)
+        if let closeBanner = images.first(where: {
+            $0.type == "banner" &&
+            $0.resolutions.original.width > 700
+        }) {
+            print("⚠️ Bannière 'Plan B' utilisée (Taille non standard)")
+            return closeBanner.resolutions.original.url
+        }
+        
+        // 3. PLAN C : N'importe quelle image taguée "banner", peu importe la taille
+        if let anyBanner = images.first(where: { $0.type == "banner" }) {
+            print("⚠️ Bannière 'Plan C' utilisée (N'importe laquelle)")
+            return anyBanner.resolutions.original.url
+        }
+        
+        return nil
     }
 }

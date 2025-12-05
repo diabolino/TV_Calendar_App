@@ -142,21 +142,59 @@ struct ShowHeatmap: View {
     
     // --- ACTIONS ---
     
+    // --- ACTIONS ---
+        
     func refreshBanner() {
+        print("🔄 Début du refresh manuel pour la série ID: \(show.tvmazeId)")
         isLoadingBanner = true
+        
         Task {
-            // On appelle l'API pour récupérer les images fraiches
-            if let details = try? await TVMazeService.shared.fetchShowWithImages(id: show.tvmazeId) {
-                // On cherche la bannière
+            do {
+                // 1. On essaie de récupérer les détails SANS le '?' pour attraper l'erreur
+                let details = try await TVMazeService.shared.fetchShowWithImages(id: show.tvmazeId)
+                print("✅ JSON décodé avec succès. Analyse des images...")
+                
+                // 2. On cherche la bannière
                 if let newBanner = TVMazeService.shared.extractBanner(from: details) {
-                    // On met à jour l'objet SwiftData (l'UI se mettra à jour toute seule)
+                    // On met à jour l'objet SwiftData
                     show.bannerUrl = newBanner
-                    print("✅ Bannière trouvée : \(newBanner)")
+                    print("🎉 Bannière trouvée et appliquée : \(newBanner)")
                 } else {
-                    print("⚠️ Toujours pas de bannière sur TVMaze")
+                    print("⚠️ L'API a répondu, mais 'extractBanner' n'a rien trouvé d'intéressant.")
+                    // Optionnel : Afficher les images trouvées pour comprendre
+                    if let images = details._embedded?.images {
+                        print("   Images disponibles : \(images.count)")
+                        for img in images {
+                            // CORRECTION ICI : Ajout de ?? "nil"
+                            print("   - Type: \(img.type ?? "nil") | Size: \(img.resolutions.original.width)x\(img.resolutions.original.height)")
+                        }
+                    } else {
+                        print("   Aucune image dans le champ _embedded.")
+                    }
+                }
+                
+            } catch {
+                // 3. C'est ICI que l'erreur va s'afficher
+                print("❌ ERREUR CRITIQUE API : \(error)")
+                
+                // Astuce : Si c'est une erreur de décodage, Swift vous dira quel champ pose problème
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .typeMismatch(let key, let context):
+                        print("   Type incorrect pour la clé : \(key), contexte: \(context.debugDescription)")
+                    case .valueNotFound(let key, let context):
+                        print("   Valeur manquante pour la clé : \(key), contexte: \(context.debugDescription)")
+                    case .keyNotFound(let key, let context):
+                        print("   Clé introuvable : \(key), contexte: \(context.debugDescription)")
+                    case .dataCorrupted(let context):
+                        print("   Données corrompues : \(context.debugDescription)")
+                    @unknown default:
+                        print("   Erreur de décodage inconnue")
+                    }
                 }
             }
-            // Petite pause pour voir le chargement
+            
+            // Fin du chargement
             try? await Task.sleep(nanoseconds: 500_000_000)
             isLoadingBanner = false
         }
