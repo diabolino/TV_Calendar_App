@@ -7,11 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A000CA282EE4658B008679AC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A000CA272EE4658B008679AC /* WidgetKit.framework */; };
+		A000CA2A2EE4658B008679AC /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A000CA292EE4658B008679AC /* SwiftUI.framework */; };
+		A000CA372EE4658D008679AC /* TVCalendarWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A000CA252EE4658B008679AC /* TVCalendarWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A00A836D2ED7A92700F9A851 /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = A00A836C2ED7A92700F9A851 /* SDWebImageSwiftUI */; };
 		A0E4A06C2ED88D4F009AF006 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A0E4A06B2ED88D4F009AF006 /* Launch Screen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		A000CA352EE4658D008679AC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00A830F2ED7365B00F9A851 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A000CA242EE4658B008679AC;
+			remoteInfo = TVCalendarWidgetExtension;
+		};
 		A00A83292ED7365D00F9A851 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A00A830F2ED7365B00F9A851 /* Project object */;
@@ -28,7 +38,25 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A000CA3C2EE4658D008679AC /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A000CA372EE4658D008679AC /* TVCalendarWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		A000CA252EE4658B008679AC /* TVCalendarWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TVCalendarWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A000CA272EE4658B008679AC /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A000CA292EE4658B008679AC /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		A000CA3D2EE465EF008679AC /* TVCalendarWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TVCalendarWidgetExtension.entitlements; sourceTree = "<group>"; };
 		A00A83172ED7365B00F9A851 /* TV_Calendar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TV_Calendar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00A83282ED7365D00F9A851 /* TV_CalendarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TV_CalendarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00A83322ED7365D00F9A851 /* TV_CalendarUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TV_CalendarUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -36,6 +64,22 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A000CA3B2EE4658D008679AC /* Exceptions for "TVCalendarWidget" folder in "TVCalendarWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A000CA242EE4658B008679AC /* TVCalendarWidgetExtension */;
+		};
+		A000CA402EE4662B008679AC /* Exceptions for "TV_Calendar" folder in "TVCalendarWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/TVModels.swift,
+				Services/SharedPersistence.swift,
+				Theme.swift,
+			);
+			target = A000CA242EE4658B008679AC /* TVCalendarWidgetExtension */;
+		};
 		A00A833A2ED7365D00F9A851 /* Exceptions for "TV_Calendar" folder in "TV_Calendar" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -46,10 +90,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A000CA2B2EE4658B008679AC /* TVCalendarWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A000CA3B2EE4658D008679AC /* Exceptions for "TVCalendarWidget" folder in "TVCalendarWidgetExtension" target */,
+			);
+			path = TVCalendarWidget;
+			sourceTree = "<group>";
+		};
 		A00A83192ED7365B00F9A851 /* TV_Calendar */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A00A833A2ED7365D00F9A851 /* Exceptions for "TV_Calendar" folder in "TV_Calendar" target */,
+				A000CA402EE4662B008679AC /* Exceptions for "TV_Calendar" folder in "TVCalendarWidgetExtension" target */,
 			);
 			path = TV_Calendar;
 			sourceTree = "<group>";
@@ -67,6 +120,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A000CA222EE4658B008679AC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A000CA2A2EE4658B008679AC /* SwiftUI.framework in Frameworks */,
+				A000CA282EE4658B008679AC /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A00A83142ED7365B00F9A851 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -92,13 +154,25 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A000CA262EE4658B008679AC /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A000CA272EE4658B008679AC /* WidgetKit.framework */,
+				A000CA292EE4658B008679AC /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		A00A830E2ED7365B00F9A851 = {
 			isa = PBXGroup;
 			children = (
+				A000CA3D2EE465EF008679AC /* TVCalendarWidgetExtension.entitlements */,
 				A0E4A06B2ED88D4F009AF006 /* Launch Screen.storyboard */,
 				A00A83192ED7365B00F9A851 /* TV_Calendar */,
 				A00A832B2ED7365D00F9A851 /* TV_CalendarTests */,
 				A00A83352ED7365D00F9A851 /* TV_CalendarUITests */,
+				A000CA2B2EE4658B008679AC /* TVCalendarWidget */,
+				A000CA262EE4658B008679AC /* Frameworks */,
 				A00A83182ED7365B00F9A851 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -109,6 +183,7 @@
 				A00A83172ED7365B00F9A851 /* TV_Calendar.app */,
 				A00A83282ED7365D00F9A851 /* TV_CalendarTests.xctest */,
 				A00A83322ED7365D00F9A851 /* TV_CalendarUITests.xctest */,
+				A000CA252EE4658B008679AC /* TVCalendarWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -116,6 +191,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A000CA242EE4658B008679AC /* TVCalendarWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A000CA382EE4658D008679AC /* Build configuration list for PBXNativeTarget "TVCalendarWidgetExtension" */;
+			buildPhases = (
+				A000CA212EE4658B008679AC /* Sources */,
+				A000CA222EE4658B008679AC /* Frameworks */,
+				A000CA232EE4658B008679AC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A000CA2B2EE4658B008679AC /* TVCalendarWidget */,
+			);
+			name = TVCalendarWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = TVCalendarWidgetExtension;
+			productReference = A000CA252EE4658B008679AC /* TVCalendarWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		A00A83162ED7365B00F9A851 /* TV_Calendar */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00A833B2ED7365D00F9A851 /* Build configuration list for PBXNativeTarget "TV_Calendar" */;
@@ -123,10 +220,12 @@
 				A00A83132ED7365B00F9A851 /* Sources */,
 				A00A83142ED7365B00F9A851 /* Frameworks */,
 				A00A83152ED7365B00F9A851 /* Resources */,
+				A000CA3C2EE4658D008679AC /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A000CA362EE4658D008679AC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A00A83192ED7365B00F9A851 /* TV_Calendar */,
@@ -195,6 +294,9 @@
 				LastSwiftUpdateCheck = 2610;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
+					A000CA242EE4658B008679AC = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
 					A00A83162ED7365B00F9A851 = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
@@ -228,11 +330,19 @@
 				A00A83162ED7365B00F9A851 /* TV_Calendar */,
 				A00A83272ED7365D00F9A851 /* TV_CalendarTests */,
 				A00A83312ED7365D00F9A851 /* TV_CalendarUITests */,
+				A000CA242EE4658B008679AC /* TVCalendarWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A000CA232EE4658B008679AC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A00A83152ED7365B00F9A851 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -258,6 +368,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A000CA212EE4658B008679AC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A00A83132ED7365B00F9A851 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -282,6 +399,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		A000CA362EE4658D008679AC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A000CA242EE4658B008679AC /* TVCalendarWidgetExtension */;
+			targetProxy = A000CA352EE4658D008679AC /* PBXContainerItemProxy */;
+		};
 		A00A832A2ED7365D00F9A851 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A00A83162ED7365B00F9A851 /* TV_Calendar */;
@@ -295,6 +417,77 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		A000CA392EE4658D008679AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TVCalendarWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1.0;
+				DEVELOPMENT_TEAM = 5DPLM8XYUV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TVCalendarWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TVCalendarWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = net.darkdiablo.TVCalendar.TVCalendarWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A000CA3A2EE4658D008679AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TVCalendarWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1.0;
+				DEVELOPMENT_TEAM = 5DPLM8XYUV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TVCalendarWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TVCalendarWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = net.darkdiablo.TVCalendar.TVCalendarWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		A00A833C2ED7365D00F9A851 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -304,7 +497,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.3;
+				CURRENT_PROJECT_VERSION = 1.0;
 				DEVELOPMENT_TEAM = 5DPLM8XYUV;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -322,7 +515,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TV_Calendar/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "TV Cal (Dev)";
+				INFOPLIST_KEY_CFBundleDisplayName = "TV Calendar";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -339,8 +532,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.3;
-				PRODUCT_BUNDLE_IDENTIFIER = net.darkdiablo.TVCalendar.dev;
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = net.darkdiablo.TVCalendar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -367,7 +560,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.3;
+				CURRENT_PROJECT_VERSION = 1.0;
 				DEVELOPMENT_TEAM = 5DPLM8XYUV;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -385,7 +578,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TV_Calendar/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "TV Cal (Dev)";
+				INFOPLIST_KEY_CFBundleDisplayName = "TV Calendar";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -402,8 +595,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.3;
-				PRODUCT_BUNDLE_IDENTIFIER = net.darkdiablo.TVCalendar.dev;
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = net.darkdiablo.TVCalendar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -642,6 +835,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A000CA382EE4658D008679AC /* Build configuration list for PBXNativeTarget "TVCalendarWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A000CA392EE4658D008679AC /* Debug */,
+				A000CA3A2EE4658D008679AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A00A83122ED7365B00F9A851 /* Build configuration list for PBXProject "TV_Calendar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

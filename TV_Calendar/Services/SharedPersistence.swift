@@ -2,31 +2,25 @@
 //  SharedPersistence.swift
 //  TV_Calendar
 //
-//  Created by Gemini.
+//  Created by Gouard matthieu on 06/12/2025.
 //
 
 import SwiftData
 import Foundation
 
 struct SharedPersistence {
-    static let appGroupIdentifier = "group.com.votreNom.TVCalendar" // ⚠️ REMPLACEZ PAR VOTRE VRAI ID APP GROUP
+    static let appGroupIdentifier = "group.net.darkdiablo.TVCalendar" // ⚠️ REMPLACEZ PAR VOTRE VRAI ID APP GROUP
 
     static var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            TVShow.self,
-            Episode.self,
-            CastMember.self,
-        ])
-        
+        let schema = Schema([TVShow.self, Episode.self, CastMember.self])
         let modelConfiguration: ModelConfiguration
         
-        // On cherche le dossier partagé par l'App Group
         if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+            print("✅ APP GROUP TROUVÉ : \(containerURL.path)") // <--- Regardez la console
             let storeURL = containerURL.appending(path: "TVCalendar.store")
             modelConfiguration = ModelConfiguration(url: storeURL, allowsSave: true)
         } else {
-            // Fallback si l'App Group est mal configuré (ne devrait pas arriver en prod)
-            print("⚠️ Erreur: Impossible de trouver l'App Group Container. Utilisation du stockage standard.")
+            print("❌ APP GROUP INTROUVABLE. Fallback sur le stockage privé.") // <--- Si vous voyez ça, l'ID est faux
             modelConfiguration = ModelConfiguration()
         }
 
