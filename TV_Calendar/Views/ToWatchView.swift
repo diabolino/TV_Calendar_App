@@ -8,30 +8,20 @@
 import SwiftUI
 import SwiftData
 
-// Enum pour les options de tri spécifiques à cette vue
-enum ToWatchSortOption: String, CaseIterable {
-    case dateAsc = "Date (Urgent)" // Prochain épisode le plus vieux (retard) ou proche
-    case dateDesc = "Date (Récent)"
-    case nameAZ = "Nom (A-Z)"
-    case progress = "Progression" // Ceux presque finis en premier
-}
-
-struct ToWatchView: View {
-    @Query var shows: [TVShow]
-    
-    // État pour le mode d'affichage
-    @State private var displayMode: ToWatchMode = .list
-    
-    // NOUVEAU : État pour le tri
-    @State private var sortOption: ToWatchSortOption = .dateAsc
+// --- VIEW MODEL ---
+@Observable
+class ToWatchViewModel {
+    // États de l'interface
+    var displayMode: ToWatchMode = .list
+    var sortOption: ToWatchSortOption = .dateAsc
     
     enum ToWatchMode: String, CaseIterable {
         case list = "Liste"
         case heatmap = "Heatmap"
     }
     
-    // LOGIQUE DE TRI ET FILTRAGE
-    var sortedAndFilteredShows: [TVShow] {
+    // Logique de Filtrage et Tri
+    func getSortedShows(from shows: [TVShow]) -> [TVShow] {
         // 1. Filtrer (Garder uniquement ce qui est à voir et sorti)
         let activeShows = shows.filter { hasReleasedUnwatchedEpisodes($0) }
         
@@ -40,7 +30,7 @@ struct ToWatchView: View {
         case .nameAZ:
             return activeShows.sorted { $0.name < $1.name }
             
-        case .dateAsc: // Du plus vieux retard au plus récent
+        case .dateAsc:
             return activeShows.sorted {
                 let date1 = nextEpisode(for: $0)?.airDate ?? Date.distantFuture
                 let date2 = nextEpisode(for: $1)?.airDate ?? Date.distantFuture
@@ -59,103 +49,7 @@ struct ToWatchView: View {
         }
     }
     
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // --- HEADER ---
-                HStack {
-                    Text("À regarder")
-                        .font(.largeTitle).bold()
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    // GROUPE : BOUTON TRI + SÉLECTEUR
-                    HStack(spacing: 12) {
-                        
-                        // 1. BOUTON TRI (Menu)
-                        Menu {
-                            Picker("Tri", selection: $sortOption) {
-                                ForEach(ToWatchSortOption.allCases, id: \.self) { option in
-                                    Text(option.rawValue).tag(option)
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up.arrow.down.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.accentPurple)
-                        }
-                        
-                        // 2. SÉLECTEUR VUE (Liste / Heatmap)
-                        HStack(spacing: 0) {
-                            ForEach(ToWatchMode.allCases, id: \.self) { mode in
-                                Button(action: { withAnimation { displayMode = mode } }) {
-                                    Text(mode.rawValue)
-                                        .font(.caption).bold()
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(displayMode == mode ? Color.accentPurple : Color.clear)
-                                        .foregroundColor(displayMode == mode ? .white : .gray)
-                                        .cornerRadius(4)
-                                }
-                            }
-                        }
-                        .padding(2)
-                        .background(Color.cardBackground)
-                        .cornerRadius(6)
-                    }
-                }
-                .padding()
-                .background(Color.appBackground)
-                
-                // --- CONTENU ---
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        
-                        let displayShows = sortedAndFilteredShows
-                        
-                        if displayShows.isEmpty {
-                            ContentUnavailableView("Vous êtes à jour !", systemImage: "checkmark.circle", description: Text("Aucun épisode en retard. Les futurs épisodes apparaîtront ici le jour de leur sortie."))
-                                .padding(.top, 50)
-                        } else {
-                            
-                            ForEach(displayShows) { show in
-                                if displayMode == .list {
-                                    // VUE LISTE
-                                    if let nextEp = nextEpisode(for: show) {
-                                        NavigationLink(destination: ShowDetailView(show: show)) {
-                                            ToWatchCard(
-                                                showName: show.name,
-                                                imageUrl: show.imageUrl,
-                                                episode: nextEp,
-                                                progress: progress(for: show)
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                } else {
-                                    // VUE HEATMAP
-                                    NavigationLink(destination: ShowDetailView(show: show)) {
-                                        // On passe la liste des épisodes (optionnels gérés)
-                                        ShowHeatmap(show: show, episodes: show.episodes ?? [])
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    }
-                    .padding()
-                }
-            }
-            .background(Color.appBackground)
-            .navigationTitle("")
-            #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
-            #endif
-        }
-    }
-    
-    // --- HELPER FUNCTIONS ---
+    // --- HELPERS MÉTIER ---
     
     func hasReleasedUnwatchedEpisodes(_ show: TVShow) -> Bool {
         let safeEpisodes = show.episodes ?? []
@@ -183,7 +77,126 @@ struct ToWatchView: View {
     }
 }
 
-// (La struct ToWatchCard reste inchangée en bas du fichier)
+// Enum pour les options de tri
+enum ToWatchSortOption: String, CaseIterable {
+    case dateAsc = "Date (Urgent)"
+    case dateDesc = "Date (Récent)"
+    case nameAZ = "Nom (A-Z)"
+    case progress = "Progression"
+}
+
+// --- VUE PRINCIPALE ---
+struct ToWatchView: View {
+    @Query var shows: [TVShow]
+    @State private var viewModel = ToWatchViewModel()
+    
+    // Permet de changer d'onglet (si passé depuis ContentView)
+    // @Binding var selectedTab: Int
+    var selectedTab: Binding<Int>? = nil
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // --- HEADER ---
+                HStack {
+                    Text("À regarder")
+                        .font(.largeTitle).bold()
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    // CONTROLES
+                    HStack(spacing: 12) {
+                        Menu {
+                            Picker("Tri", selection: $viewModel.sortOption) {
+                                ForEach(ToWatchSortOption.allCases, id: \.self) { option in
+                                    Text(option.rawValue).tag(option)
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.accentPurple)
+                        }
+                        
+                        HStack(spacing: 0) {
+                            ForEach(ToWatchViewModel.ToWatchMode.allCases, id: \.self) { mode in
+                                Button(action: { withAnimation { viewModel.displayMode = mode } }) {
+                                    Text(mode.rawValue)
+                                        .font(.caption).bold()
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(viewModel.displayMode == mode ? Color.accentPurple : Color.clear)
+                                        .foregroundColor(viewModel.displayMode == mode ? .white : .gray)
+                                        .cornerRadius(4)
+                                }
+                            }
+                        }
+                        .padding(2)
+                        .background(Color.cardBackground)
+                        .cornerRadius(6)
+                    }
+                }
+                .padding()
+                .background(Color.appBackground)
+                
+                // --- CONTENU ---
+                ScrollView {
+                    // On calcule la liste à afficher via le ViewModel
+                    let displayShows = viewModel.getSortedShows(from: shows)
+                    
+                    if shows.isEmpty {
+                        // CAS 1 : Zéro série dans l'app -> ONBOARDING
+                        // On utilise ici le WelcomeView que vous avez déjà créé
+                        WelcomeView {
+                            // Action du bouton "Commencer"
+                            selectedTab?.wrappedValue = 2
+                        }
+                        .padding(.top, 50)
+                        
+                    } else if displayShows.isEmpty {
+                        // CAS 2 : Des séries, mais tout est vu -> FELICITATIONS
+                        ContentUnavailableView("Vous êtes à jour !", systemImage: "checkmark.circle", description: Text("Aucun épisode en retard. Les futurs épisodes apparaîtront ici le jour de leur sortie."))
+                            .padding(.top, 50)
+                        
+                    } else {
+                        // CAS 3 : LISTE DES ÉPISODES
+                        LazyVStack(spacing: 16) {
+                            ForEach(displayShows) { show in
+                                if viewModel.displayMode == .list {
+                                    if let nextEp = viewModel.nextEpisode(for: show) {
+                                        NavigationLink(destination: ShowDetailView(show: show)) {
+                                            ToWatchCard(
+                                                showName: show.name,
+                                                imageUrl: show.imageUrl,
+                                                episode: nextEp,
+                                                progress: viewModel.progress(for: show)
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                } else {
+                                    NavigationLink(destination: ShowDetailView(show: show)) {
+                                        ShowHeatmap(show: show, episodes: show.episodes ?? [])
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .background(Color.appBackground)
+            .navigationTitle("")
+            #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
+            #endif
+        }
+    }
+}
+
+// --- CARTE DÉTAILLÉE ---
 struct ToWatchCard: View {
     let showName: String
     let imageUrl: String?
@@ -220,10 +233,8 @@ struct ToWatchCard: View {
                 }.frame(height: 4)
                 
                 Button(action: {
-                    withAnimation {
-                        episode.isWatched = true
-                        episode.watchedDate = Date()
-                    }
+                    HapticManager.shared.trigger(.medium)
+                    withAnimation { episode.toggleWatched() }
                 }) {
                     HStack { Image(systemName: "checkmark"); Text("Marquer comme vu") }
                         .font(.caption).bold().frame(maxWidth: .infinity).padding(.vertical, 10)

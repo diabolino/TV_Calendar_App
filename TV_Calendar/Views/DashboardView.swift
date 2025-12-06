@@ -53,6 +53,15 @@ struct DashboardView: View {
                         )
                     }
                     
+                    // --- GRAPHIQUES ---
+                    // On affiche les graphiques uniquement s'il y a des données
+                    if !shows.isEmpty {
+                        VStack(spacing: 16) {
+                            HistoryChart(episodes: episodes)
+                            StatusDistributionChart(shows: shows)
+                        }
+                    }
+                    
                     // --- HEATMAP (Activité réelle) ---
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Activité récente (7 jours)")

@@ -13,7 +13,7 @@ struct SidebarView: View {
             List {
                 // Section 1 : Votre activité
                 Section("Mon Suivi") {
-                    NavigationLink(destination: ToWatchView()) {
+                    NavigationLink(destination: ToWatchView(selectedTab: nil)) {
                         Label("À voir", systemImage: "play.tv")
                     }
                     
@@ -38,7 +38,7 @@ struct SidebarView: View {
             
         } detail: {
             // Vue par défaut au lancement sur Mac
-            ToWatchView()
+            ToWatchView(selectedTab: nil)
         }
     }
 }

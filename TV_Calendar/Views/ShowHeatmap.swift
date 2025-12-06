@@ -201,6 +201,7 @@ struct ShowHeatmap: View {
     }
     
     func handleTap(on targetEpisode: Episode) {
+        HapticManager.shared.trigger(.light)
         withAnimation(.snappy) {
             if !targetEpisode.isWatched {
                 for ep in episodesToDisplay {

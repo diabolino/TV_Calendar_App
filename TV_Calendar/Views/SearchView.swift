@@ -22,6 +22,9 @@ struct SearchView: View {
     // État du tri
     @State private var sortOption: SortOption = .nameAZ
     
+    // Réglage par défaut (stocké)
+    @AppStorage("defaultQuality") private var defaultQuality: VideoQuality = .hd1080
+    
     @FocusState private var isSearchFocused: Bool
     
     @State private var selectedShowToAdd: TVMazeService.ShowDTO?
@@ -104,17 +107,17 @@ struct SearchView: View {
                             .padding(.horizontal)
                             
                             LazyVGrid(columns: columns, spacing: 16) {
-                                // UTILISATION DE LA LISTE TRIÉE
                                 ForEach(sortedLibraryShows) { show in
                                     NavigationLink(destination: ShowDetailView(show: show)) {
                                         ShowGridItem(
                                             title: show.name,
                                             imageUrl: show.imageUrl,
-                                            quality: show.quality, // DIRECTEMENT L'ENUM
+                                            quality: show.quality,
                                             isAdded: true,
                                             progress: calculateProgress(for: show),
                                             nextEpisodeCode: getNextEpisodeCode(for: show),
-                                            action: nil
+                                            onQuickAdd: nil,
+                                            onManualAdd: nil
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -125,12 +128,13 @@ struct SearchView: View {
                             }
                             .padding(.horizontal)
                         } else {
-                            ContentUnavailableView("Bibliothèque vide", systemImage: "tv", description: Text("Recherchez une série."))
+                            ContentUnavailableView("Bibliothèque vide", systemImage: "tv", description: Text("Recherchez une série ci-dessus pour commencer."))
                                 .padding(.top, 50)
                         }
                     } else {
                         // VUE RÉSULTATS
                         Text("Résultats").font(.title2).bold().foregroundColor(.white).padding(.horizontal)
+                        
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(searchResults, id: \.id) { show in
                                 let existingQualities = getQualitiesFor(showId: show.id)
@@ -141,7 +145,24 @@ struct SearchView: View {
                                     isAdded: !existingQualities.isEmpty,
                                     progress: nil,
                                     nextEpisodeCode: nil,
-                                    action: { isSearchFocused = false; selectedShowToAdd = show; showQualitySelection = true }
+                                    onQuickAdd: {
+                                        // CLIC SIMPLE : Ajout avec qualité par défaut
+                                        isSearchFocused = false
+                                        Task {
+                                            await LibraryManager.shared.addShow(
+                                                dto: show,
+                                                quality: defaultQuality, // Utilise le réglage
+                                                context: modelContext,
+                                                existingShows: libraryShows
+                                            )
+                                        }
+                                    },
+                                    onManualAdd: {
+                                        // APPUI LONG : Choix manuel
+                                        isSearchFocused = false
+                                        selectedShowToAdd = show
+                                        showQualitySelection = true
+                                    }
                                 )
                             }
                         }
@@ -161,7 +182,12 @@ struct SearchView: View {
                 ForEach(VideoQuality.allCases, id: \.self) { quality in
                     Button(quality.rawValue) {
                         if let show = selectedShowToAdd {
-                            Task { await addShowToLibrary(show, quality: quality) }
+                            Task { await LibraryManager.shared.addShow(
+                                dto: show,
+                                quality: quality,
+                                context: modelContext,
+                                existingShows: libraryShows
+                            )}
                         }
                     }
                 }
@@ -204,113 +230,10 @@ struct SearchView: View {
     }
     
     func deleteShow(_ show: TVShow) {
-        withAnimation { modelContext.delete(show) }
+        withAnimation { LibraryManager.shared.deleteShow(show, context: modelContext) }
     }
     
-    func addShowToLibrary(_ dto: TVMazeService.ShowDTO, quality: VideoQuality) async {
-        // CORRECTION : Comparaison Enum vs Enum (Simple)
-        if libraryShows.contains(where: { $0.tvmazeId == dto.id && $0.quality == quality }) { return }
-        
-        // 2. Infos Fraiches
-        var finalBannerUrl: String? = nil
-        var finalNetwork = dto.network?.name ?? dto.webChannel?.name
-        var finalStatus = dto.status
-        var imdbIdForSearch: String? = dto.externals?.imdb
-        
-        if let details = try? await TVMazeService.shared.fetchShowWithImages(id: dto.id) {
-            finalBannerUrl = TVMazeService.shared.extractBanner(from: details)
-            finalNetwork = details.network?.name ?? details.webChannel?.name
-            finalStatus = details.status
-            imdbIdForSearch = details.externals?.imdb
-        }
-        
-        // 3. TMDB
-        var finalOverview = dto.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression) ?? ""
-        var finalImage = dto.image?.original ?? dto.image?.medium
-        var tmdbId: Int? = nil
-        
-        if let imdb = imdbIdForSearch, let tmdbResult = try? await TMDBService.shared.findShowByExternalId(imdbId: imdb) {
-            tmdbId = tmdbResult.id
-            if let fr = tmdbResult.overview, !fr.isEmpty { finalOverview = fr }
-            if let img = tmdbResult.poster_path { finalImage = TMDBService.imageURL(path: img) }
-        } else if let tmdbResult = try? await TMDBService.shared.searchShowByName(query: dto.name) {
-            tmdbId = tmdbResult.id
-            if let fr = tmdbResult.overview, !fr.isEmpty { finalOverview = fr }
-            if let img = tmdbResult.poster_path { finalImage = TMDBService.imageURL(path: img) }
-        }
-
-        let newShow = TVShow(
-            tvmazeId: dto.id, name: dto.name, overview: finalOverview, imageUrl: finalImage,
-            bannerUrl: finalBannerUrl, network: finalNetwork, status: finalStatus,
-            quality: quality // PAS DE CONVERSION ICI, quality est bien un Enum
-        )
-        modelContext.insert(newShow)
-        
-        // 5. Episodes
-        if let episodes = try? await TVMazeService.shared.fetchEpisodes(showId: dto.id) {
-            let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
-            let episodesBySeason = Dictionary(grouping: episodes, by: { $0.season })
-            
-            for (seasonNum, seasonEpisodes) in episodesBySeason {
-                var frenchOverviews: [Int: String] = [:]
-                var englishOverviews: [Int: String] = [:]
-                
-                if let tId = tmdbId {
-                    if let frSeason = try? await TMDBService.shared.fetchSeasonDetails(tmdbShowId: tId, seasonNumber: seasonNum, language: "fr-FR") {
-                        for ep in frSeason.episodes { if let ov = ep.overview, !ov.isEmpty { frenchOverviews[ep.episode_number] = ov } }
-                    }
-                    if seasonEpisodes.count > frenchOverviews.count {
-                        if let enSeason = try? await TMDBService.shared.fetchSeasonDetails(tmdbShowId: tId, seasonNumber: seasonNum, language: "en-US") {
-                            for ep in enSeason.episodes { if let ov = ep.overview, !ov.isEmpty { englishOverviews[ep.episode_number] = ov } }
-                        }
-                    }
-                }
-                
-                for ep in seasonEpisodes {
-                    let date = ep.airdate != nil ? formatter.date(from: ep.airdate!) : nil
-                    var epOverview = ""
-                    var isTranslated = false
-                    
-                    if let fr = frenchOverviews[ep.number] {
-                        epOverview = fr
-                        isTranslated = false
-                    } else {
-                        let sourceText = englishOverviews[ep.number] ?? ep.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression) ?? ""
-                        if !sourceText.isEmpty {
-                            if let translatedText = await TranslationService.shared.translate(text: sourceText) {
-                                epOverview = translatedText; isTranslated = true
-                            } else {
-                                epOverview = sourceText; isTranslated = true
-                            }
-                        }
-                    }
-                    
-                    let newEp = Episode(
-                        tvmazeId: ep.id, title: ep.name, season: ep.season, number: ep.number,
-                        airDate: date, runtime: ep.runtime, overview: epOverview
-                    )
-                    newEp.isAutoTranslated = isTranslated
-                    newEp.id = "\(newShow.uuid)-\(ep.id)"
-                    newEp.show = newShow
-                    modelContext.insert(newEp)
-                    
-                    if let validDate = newEp.airDate, validDate > Date() {
-                        NotificationManager.shared.scheduleNotification(for: newEp)
-                    }
-                }
-            }
-        }
-        
-        // 6. Casting
-        if let cast = try? await TVMazeService.shared.fetchCast(showId: dto.id) {
-            for c in cast.prefix(10) {
-                let actor = CastMember(personId: c.person.id, name: c.person.name, characterName: c.character.name, imageUrl: c.person.image?.medium)
-                actor.show = newShow
-                modelContext.insert(actor)
-            }
-        }
-    }
-    
+    // --- CARTE AVEC DOUBLE ACTION (RETROUVÉE !) ---
     struct ShowGridItem: View {
         let title: String
         let imageUrl: String?
@@ -318,7 +241,10 @@ struct SearchView: View {
         let isAdded: Bool
         let progress: Double?
         let nextEpisodeCode: String?
-        let action: (() -> Void)?
+        
+        // On accepte deux actions distinctes
+        let onQuickAdd: (() -> Void)?
+        let onManualAdd: (() -> Void)?
         
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
@@ -336,6 +262,7 @@ struct SearchView: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.caption).bold().foregroundColor(.white).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    
                     if let prog = progress {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
@@ -344,12 +271,30 @@ struct SearchView: View {
                             }
                         }.frame(height: 4)
                     }
+                    
                     HStack {
-                        if let action = action {
-                            Button(action: action) {
-                                Text("AJOUTER").font(.system(size: 10, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 6).background(Color.accentPurple).foregroundColor(.white).cornerRadius(4)
-                            }
-                        } else {
+                        // SI MODE AJOUT (RECHERCHE)
+                        if let onQuick = onQuickAdd, let onManual = onManualAdd {
+                            Text("AJOUTER")
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(Color.accentPurple)
+                                .foregroundColor(.white)
+                                .cornerRadius(4)
+                                // GESTE 1 : Tap Simple -> Quick Add
+                                .onTapGesture {
+                                    HapticManager.shared.trigger(.light)
+                                    onQuick()
+                                }
+                                // GESTE 2 : Long Press -> Manual Add
+                                .onLongPressGesture(minimumDuration: 0.5) {
+                                    HapticManager.shared.trigger(.heavy)
+                                    onManual()
+                                }
+                        }
+                        // SI MODE BIBLIOTHÈQUE
+                        else {
                             if let q = quality {
                                 Text(q.rawValue).font(.system(size: 9, weight: .bold)).padding(.horizontal, 6).padding(.vertical, 2).background(qualityColor(q).opacity(0.2)).foregroundColor(qualityColor(q)).cornerRadius(3).overlay(RoundedRectangle(cornerRadius: 3).stroke(qualityColor(q), lineWidth: 1))
                             }

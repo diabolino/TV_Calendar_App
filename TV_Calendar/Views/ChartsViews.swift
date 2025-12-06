@@ -1,5 +1,5 @@
 //
-//  HistoryChart.swift
+//  ChartsViews.swift
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 06/12/2025.
@@ -55,9 +55,8 @@ struct HistoryChart: View {
                     )
                     .foregroundStyle(LinearGradient(colors: [.accentPurple, .accentPink], startPoint: .bottom, endPoint: .top))
                     .cornerRadius(4)
-                    
-                    // Affiche la valeur au dessus de la barre
-                    Annotation(position: .top, alignment: .center) {
+                    // CORRECTION ICI : .annotation est un modificateur, pas une vue
+                    .annotation(position: .top, alignment: .center) {
                         Text(String(format: "%.1fh", item.hours))
                             .font(.caption2)
                             .foregroundColor(.gray)

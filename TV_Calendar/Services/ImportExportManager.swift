@@ -13,7 +13,7 @@ import UniformTypeIdentifiers
 
 // --- STRUCTURES DE SAUVEGARDE (JSON) ---
 struct BackupData: Codable {
-    let version: Int // Pour gérer les futures évolutions
+    let version: Int
     let date: Date
     let shows: [BackupShow]
 }
@@ -26,7 +26,7 @@ struct BackupShow: Codable {
     let bannerUrl: String?
     let network: String?
     let status: String?
-    let quality: String
+    let quality: String // On stocke en String dans le fichier JSON
     let episodes: [BackupEpisode]
 }
 
@@ -62,7 +62,8 @@ class ImportExportManager {
                     bannerUrl: show.bannerUrl,
                     network: show.network,
                     status: show.status,
-                    quality: show.quality,
+                    // CORRECTION ICI : On convertit l'Enum en String
+                    quality: show.quality.rawValue,
                     episodes: (show.episodes ?? []).map { ep in
                         BackupEpisode(
                             tvmazeId: ep.tvmazeId,
@@ -102,7 +103,6 @@ class ImportExportManager {
     @MainActor
     func restoreBackup(from url: URL, context: ModelContext) async throws -> Int {
         // A. Lire et décoder le fichier
-        // Note: startAccessingSecurityScopedResource est crucial pour lire les fichiers sélectionnés
         let gotAccess = url.startAccessingSecurityScopedResource()
         defer { if gotAccess { url.stopAccessingSecurityScopedResource() } }
         
@@ -119,11 +119,12 @@ class ImportExportManager {
         
         // C. Insérer les données
         for backupShow in backup.shows {
+            // Conversion du String JSON vers l'Enum
+            let importedQuality = VideoQuality(rawValue: backupShow.quality) ?? .hd1080
+            
             // Vérification doublon (Même ID + Même Qualité)
-            if let existing = existingShows.first(where: { $0.tvmazeId == backupShow.tvmazeId && $0.quality == backupShow.quality }) {
+            if let _ = existingShows.first(where: { $0.tvmazeId == backupShow.tvmazeId && $0.quality == importedQuality }) {
                 print("♻️ Mise à jour de l'existant : \(backupShow.name)")
-                // On pourrait mettre à jour le statut des épisodes ici si on veut fusionner
-                // Pour l'instant, on ignore si ça existe déjà pour ne pas écraser
                 continue
             }
             
@@ -136,7 +137,7 @@ class ImportExportManager {
                 bannerUrl: backupShow.bannerUrl,
                 network: backupShow.network,
                 status: backupShow.status,
-                quality: VideoQuality(rawValue: backupShow.quality) ?? .hd1080 // Conversion String -> Enum
+                quality: importedQuality // Utilisation de l'Enum converti
             )
             context.insert(newShow)
             
@@ -147,12 +148,11 @@ class ImportExportManager {
                     title: backupEp.title,
                     season: backupEp.season,
                     number: backupEp.number,
-                    airDate: nil, // On ne stocke pas la date de sortie dans le backup pour gagner de la place, elle se mettra à jour via l'API plus tard
+                    airDate: nil,
                     runtime: nil,
                     overview: backupEp.overview
                 )
                 
-                // Restauration de l'état "Vu"
                 newEp.isWatched = backupEp.isWatched
                 newEp.watchedDate = backupEp.watchedDate
                 
@@ -164,11 +164,9 @@ class ImportExportManager {
             importedCount += 1
         }
         
-        // On force une synchro API pour récupérer les dates de sortie manquantes et les castings
-        // C'est plus propre que de tout stocker dans le JSON
+        // On force une synchro API pour récupérer les dates de sortie manquantes
         if importedCount > 0 {
             Task {
-                // On lance la synchro en tâche de fond
                 await SyncManager.shared.synchronizeLibrary(modelContext: context)
             }
         }

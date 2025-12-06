@@ -6,13 +6,14 @@ import SwiftUI
 class LibraryManager {
     static let shared = LibraryManager()
     
-    // --- AJOUT D'UNE SÉRIE (La grosse fonction extraite) ---
+    // --- AJOUT D'UNE SÉRIE ---
     @MainActor
     func addShow(dto: TVMazeService.ShowDTO, quality: VideoQuality, context: ModelContext, existingShows: [TVShow]) async {
         
-        // 1. Vérification doublons
-        // On vérifie si on a déjà cette série avec CETTE qualité
-        if existingShows.contains(where: { $0.tvmazeId == dto.id && $0.quality == quality.rawValue }) {
+        // 1. Vérification doublons (CORRIGÉE)
+        // On compare directement l'Enum ($0.quality) avec l'Enum (quality)
+        // On a retiré .rawValue qui causait l'erreur
+        if existingShows.contains(where: { $0.tvmazeId == dto.id && $0.quality == quality }) {
             print("⚠️ Cette version existe déjà dans la bibliothèque.")
             return
         }
@@ -56,7 +57,7 @@ class LibraryManager {
             bannerUrl: finalBannerUrl,
             network: finalNetwork,
             status: finalStatus,
-            quality: quality // Enum converti en String par l'init
+            quality: quality // Ici c'est bon, l'init attend bien un VideoQuality
         )
         context.insert(newShow)
         

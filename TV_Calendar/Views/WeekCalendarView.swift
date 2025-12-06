@@ -91,12 +91,13 @@ struct WeekAgendaCard: View {
             
             Spacer() // Pousse le contenu vers la gauche
             
-            Button(action: { withAnimation { episode.toggleWatched() } }) {
-                Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundColor(episode.isWatched ? .green : .gray.opacity(0.3))
-            }
-            .buttonStyle(.plain)
+            Button(action: {
+                // AJOUT HAPTIC ICI
+                HapticManager.shared.trigger(.light)
+                withAnimation { episode.toggleWatched() }
+            }) {
+                Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "circle").font(.title2).foregroundColor(episode.isWatched ? .green : .gray.opacity(0.3))
+            }.buttonStyle(.plain)
         }
         .padding(10)
         .background(Color.cardBackground)

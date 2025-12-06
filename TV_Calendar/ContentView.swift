@@ -13,55 +13,69 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) var sizeClass
     #endif
     
-    // On force le mode sombre pour toute l'app
+    // NOUVEAU : L'état qui contrôle l'onglet actif
+    @State private var selectedTab: Int = 0
+
     var body: some View {
         Group {
             #if os(macOS)
                 SidebarView()
             #else
                 if sizeClass == .compact {
-                    TabNavigationView()
+                    TabNavigationView(selectedTab: $selectedTab) // On passe le binding
                 } else {
                     SidebarView()
                 }
             #endif
         }
-        .preferredColorScheme(.dark) // FORCE LE DARK MODE
+        .preferredColorScheme(.dark)
     }
 }
 
 struct TabNavigationView: View {
+    // On récupère le binding ici
+    @Binding var selectedTab: Int
     
-    // Customisation de la TabBar pour qu'elle soit sombre
-    #if os(iOS)
-    init() {
+    init(selectedTab: Binding<Int>) {
+        self._selectedTab = selectedTab // Initialisation du binding
+        
+        // Customisation TabBar
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        // On utilise UIColor que sur iOS. Sur Mac ce code sera ignoré.
         appearance.backgroundColor = UIColor(Color.appBackground)
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
-    #endif
     
     var body: some View {
-        TabView {
-            // Onglet 1 : À Voir (Nouveau !)
-            ToWatchView()
-                .tabItem { Label("À voir", systemImage: "play.tv") }
+        // Ajout de la sélection
+        TabView(selection: $selectedTab) {
             
-            // Onglet 2 : Calendrier
+            // Onglet 0
+            ToWatchView(selectedTab: $selectedTab) // On passe le relais
+                .tabItem { Label("À voir", systemImage: "play.tv") }
+                .tag(0) // <--- TAG 0
+            
+            // Onglet 1
             CalendarView()
                 .tabItem { Label("Calendrier", systemImage: "calendar") }
+                .tag(1) // <--- TAG 1
             
-            // Onglet 3 : Séries (Recherche/Bibliothèque)
+            // Onglet 2
             SearchView()
                 .tabItem { Label("Séries", systemImage: "square.grid.2x2") }
+                .tag(2) // <--- TAG 2 (C'est lui qu'on veut viser)
             
-            // Onglet 4 : Dashboard
+            // Onglet 3
             DashboardView()
                 .tabItem { Label("Dashboard", systemImage: "chart.bar") }
+                .tag(3) // <--- TAG 3
+            
+            // Onglet 4
+            SettingsView()
+                .tabItem { Label("Réglages", systemImage: "gear") }
+                .tag(4) // <--- TAG 4
         }
-        .accentColor(Color.accentPurple) // Couleur des icones actives
+        .accentColor(Color.accentPurple)
     }
 }

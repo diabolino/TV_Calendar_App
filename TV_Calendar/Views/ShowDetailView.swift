@@ -361,6 +361,7 @@ struct DetailEpisodeRow: View {
                 
                 // Bouton Vu
                 Button(action: {
+                    HapticManager.shared.trigger(.medium)
                     withAnimation { episode.toggleWatched() }
                 }) {
                     Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "circle")
