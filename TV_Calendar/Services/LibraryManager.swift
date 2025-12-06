@@ -14,11 +14,15 @@ class LibraryManager {
         // On compare directement l'Enum ($0.quality) avec l'Enum (quality)
         // On a retiré .rawValue qui causait l'erreur
         if existingShows.contains(where: { $0.tvmazeId == dto.id && $0.quality == quality }) {
-            print("⚠️ Cette version existe déjà dans la bibliothèque.")
+            print("⚠️ Cette version existe déjà.")
+            // AJOUT :
+            ToastManager.shared.show("Cette série est déjà dans votre bibliothèque", style: .error)
             return
         }
         
         print("📥 Début de l'ajout : \(dto.name)")
+        // AJOUT :
+        ToastManager.shared.show("Ajout de \(dto.name) en cours...", style: .info)
         
         // 2. Infos Fraiches (TVMaze Update)
         var finalBannerUrl: String? = nil
@@ -126,11 +130,16 @@ class LibraryManager {
         }
         
         print("✅ Série ajoutée avec succès : \(dto.name)")
+        // AJOUT :
+        ToastManager.shared.show("\(dto.name) ajoutée avec succès !", style: .success)
+
     }
     
     // --- SUPPRESSION ---
     @MainActor
     func deleteShow(_ show: TVShow, context: ModelContext) {
+        let name = show.name // On garde le nom avant de supprimer
         context.delete(show)
+        ToastManager.shared.show("\(name) supprimée", style: .error)
     }
 }

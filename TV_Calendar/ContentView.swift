@@ -13,20 +13,34 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) var sizeClass
     #endif
     
-    // NOUVEAU : L'état qui contrôle l'onglet actif
     @State private var selectedTab: Int = 0
+    
+    // NOUVEAU : On observe le manager
+    @State private var toastManager = ToastManager.shared
 
     var body: some View {
-        Group {
-            #if os(macOS)
-                SidebarView()
-            #else
-                if sizeClass == .compact {
-                    TabNavigationView(selectedTab: $selectedTab) // On passe le binding
-                } else {
+        ZStack(alignment: .bottom) { // ZStack pour superposer le Toast
+            
+            // --- VOTRE CONTENU PRINCIPAL ---
+            Group {
+                #if os(macOS)
                     SidebarView()
-                }
-            #endif
+                #else
+                    if sizeClass == .compact {
+                        TabNavigationView(selectedTab: $selectedTab)
+                    } else {
+                        SidebarView()
+                    }
+                #endif
+            }
+            
+            // --- LA ZONE DE TOAST ---
+            if let toast = toastManager.currentToast {
+                ToastView(toast: toast)
+                    .padding(.bottom, 60) // Un peu au-dessus de la TabBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(100) // Toujours au-dessus
+            }
         }
         .preferredColorScheme(.dark)
     }

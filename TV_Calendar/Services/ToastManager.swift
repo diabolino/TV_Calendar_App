@@ -1,5 +1,5 @@
 //
-//  ToastStyle.swift
+//  ToastManager.swift
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 06/12/2025.
