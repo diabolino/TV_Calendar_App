@@ -25,6 +25,7 @@ struct SettingsView: View {
     @State private var showFileImporter = false
     @State private var importAlertMessage = ""
     @State private var showImportAlert = false
+    @State private var showTraktImporter = false
     
     var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -57,6 +58,12 @@ struct SettingsView: View {
                     
                     Button(action: { showFileImporter = true }) {
                         Label("Importer une sauvegarde", systemImage: "square.and.arrow.down")
+                    }
+                    
+                    // --- NOUVEAU BOUTON TRAKT ---
+                    Button(action: { showTraktImporter = true }) {
+                        Label("Importer historique Trakt (.json)", systemImage: "play.tv.fill")
+                            .foregroundColor(.accentPurple)
                     }
                 }
                 
@@ -132,6 +139,15 @@ struct SettingsView: View {
             ) { result in
                 handleImport(result: result)
             }
+            
+            // GESTION DE L'IMPORT TRAKT
+            .fileImporter(
+                isPresented: $showTraktImporter,
+                allowedContentTypes: [.json],
+                allowsMultipleSelection: false
+            ) { result in
+                handleTraktImport(result: result)
+            }
             // ALERTES
             .alert("Importation", isPresented: $showImportAlert) {
                 Button("OK", role: .cancel) { }
@@ -170,6 +186,38 @@ struct SettingsView: View {
             }
         case .failure(let error):
             importAlertMessage = "Échec de la sélection : \(error.localizedDescription)"
+            showImportAlert = true
+        }
+    }
+    
+    func handleTraktImport(result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            
+            // On affiche un toast long car ça peut prendre du temps
+            ToastManager.shared.show("Import Trakt démarré. Gardez l'app ouverte...", style: .info)
+            
+            Task {
+                // On récupère les séries existantes pour éviter les doublons
+                let descriptor = FetchDescriptor<TVShow>()
+                let existingShows = (try? modelContext.fetch(descriptor)) ?? []
+                
+                let resultMessage = await TraktImportManager.shared.importTraktBackup(
+                    from: url,
+                    context: modelContext,
+                    existingShows: existingShows
+                )
+                
+                await MainActor.run {
+                    importAlertMessage = resultMessage
+                    showImportAlert = true
+                    // Force un petit refresh Haptic
+                    HapticManager.shared.success()
+                }
+            }
+        case .failure(let error):
+            importAlertMessage = "Erreur sélection : \(error.localizedDescription)"
             showImportAlert = true
         }
     }

@@ -16,7 +16,7 @@ struct WidgetShowItem: Identifiable {
     let showName: String
     let episodeCode: String
     let imageData: Data?
-    let date: Date // On garde la date pour le tri
+    let date: Date
 }
 
 // 2. L'Entrée
@@ -48,20 +48,14 @@ struct Provider: TimelineProvider {
             
             var widgetItems: [WidgetShowItem] = []
             
-            // 🚀 CHANGEMENT MAJEUR : On récupère les SÉRIES, pas les ÉPISODES
-            // Cela garantit qu'une série avec 100 épisodes de retard ne bloque pas les autres
             let descriptor = FetchDescriptor<TVShow>()
             
             do {
                 let allShows = try modelContext.fetch(descriptor)
                 
-                // Pour chaque série, on cherche le PREMIER épisode à voir
                 for show in allShows {
-                    // On récupère les épisodes de la série (sécurisé)
                     let episodes = show.episodes ?? []
                     
-                    // On cherche le premier épisode : Non Vu + Date Connue
-                    // On trie par saison/épisode pour avoir le chronologique
                     let nextEpisode = episodes
                         .filter { !$0.isWatched && $0.airDate != nil }
                         .sorted {
@@ -70,13 +64,10 @@ struct Provider: TimelineProvider {
                         }
                         .first
                     
-                    // Si on a trouvé un candidat
                     if let ep = nextEpisode, let airDate = ep.airDate {
                         
-                        // Téléchargement et Resize Image
                         var finalData: Data? = nil
                         if let urlStr = show.imageUrl, let url = URL(string: urlStr) {
-                            // Petit hack synchrone propre dans une Task
                             if let data = try? Data(contentsOf: url) {
                                 finalData = resizeImage(data: data, maxPixelSize: 300)
                             }
@@ -93,14 +84,12 @@ struct Provider: TimelineProvider {
                     }
                 }
                 
-                // MAINTENANT on trie les séries par la date de l'épisode (le plus vieux/urgent en premier)
                 widgetItems.sort { $0.date < $1.date }
                 
             } catch {
                 print("❌ Erreur Fetch Widget: \(error)")
             }
             
-            // On ne garde que les 3 premiers pour le widget
             let finalItems = Array(widgetItems.prefix(3))
             
             let entry = SimpleEntry(date: currentDate, items: finalItems)
@@ -124,10 +113,12 @@ struct Provider: TimelineProvider {
     }
 }
 
-// 4. La Vue (Avec correctif d'alignement)
+// 4. La Vue (Correctif final "Transparent Mode")
 struct TVCalendarWidgetEntryView : View {
     var entry: Provider.Entry
     @Environment(\.widgetFamily) var family
+    // INDISPENSABLE : Pour détecter si l'user est en mode "Transparent/Teinté"
+    @Environment(\.widgetRenderingMode) var renderingMode
 
     var body: some View {
         Group {
@@ -142,25 +133,21 @@ struct TVCalendarWidgetEntryView : View {
             } else {
                 switch family {
                 case .systemSmall:
-                    // Petit : Affiche le 1er
                     if let first = entry.items.first {
                         SinglePosterItem(item: first, isSmall: true)
+                            .widgetURL(URL(string: "tvcalendar://show/\(first.id)"))
                     }
                 case .systemMedium:
-                    // Moyen : Affiche 3 colonnes STRICTES
                     HStack(spacing: 12) {
-                        // On boucle de 0 à 2 pour forcer 3 emplacements
                         ForEach(0..<3) { index in
                             if index < entry.items.count {
-                                // Cas : Série existante
                                 let item = entry.items[index]
                                 Link(destination: URL(string: "tvcalendar://show/\(item.id)")!) {
                                     SinglePosterItem(item: item, isSmall: false)
                                 }
+                                .buttonStyle(.plain)
                             } else {
-                                // Cas : Emplacement vide (Invisible mais prend de la place)
                                 Color.clear
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
                         }
                     }
@@ -169,11 +156,20 @@ struct TVCalendarWidgetEntryView : View {
                 }
             }
         }
-        .containerBackground(for: .widget) { Color.appBackground }
+        // LE FIX EST ICI 👇
+        .containerBackground(for: .widget) {
+            // Si le mode est "Accented" (Transparent/Teinté), on ne veut AUCUN fond.
+            if renderingMode == .accented {
+                Color.clear
+            } else {
+                // Sinon (Mode Clair/Sombre classique), on met ton fond habituel
+                Color.appBackground
+            }
+        }
     }
 }
 
-// Sous-vue Affiche (Sans GeometryReader pour éviter l'étirement bizarre)
+// Sous-vue Affiche (Patchée pour garder les couleurs)
 struct SinglePosterItem: View {
     let item: WidgetShowItem
     let isSmall: Bool
@@ -182,16 +178,12 @@ struct SinglePosterItem: View {
         ZStack(alignment: .bottom) {
             // IMAGE
             if let data = item.imageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill) // Remplit le cadre verticalement
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .overlay(LinearGradient(colors: [.black, .transparent], startPoint: .bottom, endPoint: .center))
+                posterImage(uiImage)
             } else {
-                Color.cardBackground
+                // Fallback si pas d'image
+                Color.gray.opacity(0.3)
                 Image(systemName: "tv")
-                    .foregroundStyle(.white.opacity(0.2))
+                    .foregroundStyle(.white.opacity(0.5))
             }
             
             // TEXTE
@@ -205,13 +197,30 @@ struct SinglePosterItem: View {
                 
                 Text(item.episodeCode)
                     .font(.system(size: isSmall ? 10 : 9, weight: .heavy))
-                    .foregroundStyle(Color.accentPurple)
+                    // On force une couleur visible même en mode teinté
+                    .foregroundStyle(Color.purple)
             }
             .padding(.bottom, 8)
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity)
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .contentShape(Rectangle())
+        // LE DEUXIÈME FIX EST ICI 👇
+        // Cela dit : "Ne touche pas aux couleurs de ce bloc, garde l'image originale !"
+        .widgetAccentable(false)
+    }
+    
+    // Helper pour l'image avec support iOS 18+
+    @ViewBuilder
+    private func posterImage(_ uiImage: UIImage) -> some View {
+        Image(uiImage: uiImage)
+            .resizable()
+            .widgetAccentedRenderingMode(.fullColor)  // DOIT être juste après .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .overlay(LinearGradient(colors: [.black, .transparent], startPoint: .bottom, endPoint: .center))
     }
 }
 
@@ -230,5 +239,7 @@ struct TVCalendarWidget: Widget {
         .configurationDisplayName("Ma Galerie")
         .description("Vos prochaines séries à regarder.")
         .supportedFamilies([.systemSmall, .systemMedium])
+        // On assure que le content margin est respecté
+        .contentMarginsDisabled()
     }
 }

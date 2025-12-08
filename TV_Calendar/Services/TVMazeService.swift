@@ -172,4 +172,26 @@ struct TVMazeService {
         
         return nil
     }
+        
+    // --- NOUVEAU : Lookup pour l'import Trakt ---
+    // Doc: https://www.tvmaze.com/api#show-lookup
+    func lookupShow(imdbId: String?, tvdbId: Int?) async throws -> ShowDTO? {
+        var urlString: String? = nil
+        
+        if let imdb = imdbId, !imdb.isEmpty {
+            urlString = "\(baseURL)/lookup/shows?imdb=\(imdb)"
+        } else if let tvdb = tvdbId {
+            urlString = "\(baseURL)/lookup/shows?thetvdb=\(tvdb)"
+        }
+        
+        guard let validUrlString = urlString, let url = URL(string: validUrlString) else { return nil }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 404 {
+            return nil // Pas trouvé
+        }
+        
+        return try JSONDecoder().decode(ShowDTO.self, from: data)
+    }
 }
