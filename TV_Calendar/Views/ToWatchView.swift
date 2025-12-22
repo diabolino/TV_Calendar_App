@@ -87,12 +87,16 @@ enum ToWatchSortOption: String, CaseIterable {
 
 // --- VUE PRINCIPALE ---
 struct ToWatchView: View {
-    @Query var shows: [TVShow]
+    let profileId: String? // NOUVEAU
+    
+    @Query var allShows: [TVShow]
     @State private var viewModel = ToWatchViewModel()
     
-    // Permet de changer d'onglet (si passé depuis ContentView)
-    // @Binding var selectedTab: Int
-    var selectedTab: Binding<Int>? = nil
+    // FILTRAGE DYNAMIQUE
+    var myShows: [TVShow] {
+        guard let pid = profileId, let uuid = UUID(uuidString: pid) else { return [] }
+        return allShows.filter { $0.profileId == uuid }
+    }
     
     var body: some View {
         NavigationStack {
@@ -142,20 +146,16 @@ struct ToWatchView: View {
                 
                 // --- CONTENU ---
                 ScrollView {
-                    // On calcule la liste à afficher via le ViewModel
-                    let displayShows = viewModel.getSortedShows(from: shows)
+                    // Utilisation de myShows filtré
+                    let displayShows = viewModel.getSortedShows(from: myShows)
                     
-                    if shows.isEmpty {
-                        // CAS 1 : Zéro série dans l'app -> ONBOARDING
-                        // On utilise ici le WelcomeView que vous avez déjà créé
-                        WelcomeView {
-                            // Action du bouton "Commencer"
-                            selectedTab?.wrappedValue = 2
-                        }
-                        .padding(.top, 50)
+                    if myShows.isEmpty {
+                        // CAS 1 : Zéro série
+                        ContentUnavailableView("Bibliothèque vide", systemImage: "plus.circle", description: Text("Ajoutez des séries pour voir votre progression ici."))
+                            .padding(.top, 50)
                         
                     } else if displayShows.isEmpty {
-                        // CAS 2 : Des séries, mais tout est vu -> FELICITATIONS
+                        // CAS 2 : Des séries, mais tout est vu
                         ContentUnavailableView("Vous êtes à jour !", systemImage: "checkmark.circle", description: Text("Aucun épisode en retard. Les futurs épisodes apparaîtront ici le jour de leur sortie."))
                             .padding(.top, 50)
                         
@@ -168,7 +168,7 @@ struct ToWatchView: View {
                                         NavigationLink(destination: ShowDetailView(show: show)) {
                                             ToWatchCard(
                                                 showName: show.name,
-                                                imageUrl: show.imageUrl,
+                                                imageUrl: show.bannerUrl ?? show.imageUrl,
                                                 episode: nextEp,
                                                 progress: viewModel.progress(for: show)
                                             )
@@ -196,7 +196,7 @@ struct ToWatchView: View {
     }
 }
 
-// --- CARTE DÉTAILLÉE ---
+// --- CARTE DÉTAILLÉE (C'est elle qui manquait !) ---
 struct ToWatchCard: View {
     let showName: String
     let imageUrl: String?
@@ -236,9 +236,15 @@ struct ToWatchCard: View {
                     HapticManager.shared.trigger(.medium)
                     withAnimation { episode.toggleWatched() }
                 }) {
-                    HStack { Image(systemName: "checkmark"); Text("Marquer comme vu") }
-                        .font(.caption).bold().frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(Color.accentPurple.opacity(0.2)).foregroundColor(Color.accentPurple)
+                    HStack {
+                        Image(systemName: "checkmark")
+                        Text("Marquer comme vu")
+                    }
+                    .font(.caption).bold()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.accentPurple.opacity(0.2))
+                    .foregroundColor(Color.accentPurple)
                 }
                 .buttonStyle(.plain)
             }

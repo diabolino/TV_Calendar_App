@@ -9,37 +9,39 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    // NOUVEAU : Binding pour gérer la déconnexion
+    @Binding var currentProfileId: String?
+    
     #if os(iOS)
     @Environment(\.horizontalSizeClass) var sizeClass
     #endif
     
     @State private var selectedTab: Int = 0
-    
-    // NOUVEAU : On observe le manager
     @State private var toastManager = ToastManager.shared
 
     var body: some View {
-        ZStack(alignment: .bottom) { // ZStack pour superposer le Toast
+        ZStack(alignment: .bottom) {
             
-            // --- VOTRE CONTENU PRINCIPAL ---
+            // --- CONTENU PRINCIPAL ---
             Group {
                 #if os(macOS)
-                    SidebarView()
+                    SidebarView() // Note: Il faudra adapter SidebarView plus tard si tu l'utilises sur Mac
                 #else
                     if sizeClass == .compact {
-                        TabNavigationView(selectedTab: $selectedTab)
+                        // On passe l'ID du profil à la TabView
+                        TabNavigationView(selectedTab: $selectedTab, profileId: currentProfileId)
                     } else {
                         SidebarView()
                     }
                 #endif
             }
             
-            // --- LA ZONE DE TOAST ---
+            // --- LA ZONE DE TOAST (Code Original restauré) ---
             if let toast = toastManager.currentToast {
                 ToastView(toast: toast)
-                    .padding(.bottom, 60) // Un peu au-dessus de la TabBar
+                    .padding(.bottom, 60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(100) // Toujours au-dessus
+                    .zIndex(100)
             }
         }
         .preferredColorScheme(.dark)
@@ -47,13 +49,14 @@ struct ContentView: View {
 }
 
 struct TabNavigationView: View {
-    // On récupère le binding ici
     @Binding var selectedTab: Int
+    let profileId: String? // NOUVEAU
     
-    init(selectedTab: Binding<Int>) {
-        self._selectedTab = selectedTab // Initialisation du binding
+    init(selectedTab: Binding<Int>, profileId: String?) {
+        self._selectedTab = selectedTab
+        self.profileId = profileId
         
-        // Customisation TabBar
+        // Customisation TabBar (Code Original)
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(Color.appBackground)
@@ -62,33 +65,37 @@ struct TabNavigationView: View {
     }
     
     var body: some View {
-        // Ajout de la sélection
         TabView(selection: $selectedTab) {
             
-            // Onglet 0
-            ToWatchView(selectedTab: $selectedTab) // On passe le relais
+            // Onglet 0 : À voir
+            ToWatchView(profileId: profileId)
                 .tabItem { Label("À voir", systemImage: "play.tv") }
-                .tag(0) // <--- TAG 0
+                .tag(0)
             
-            // Onglet 1
-            CalendarView()
+            // Onglet 1 : Calendrier
+            CalendarView(profileId: profileId)
                 .tabItem { Label("Calendrier", systemImage: "calendar") }
-                .tag(1) // <--- TAG 1
+                .tag(1)
             
-            // Onglet 2
-            SearchView()
-                .tabItem { Label("Séries", systemImage: "square.grid.2x2") }
-                .tag(2) // <--- TAG 2 (C'est lui qu'on veut viser)
+            // Onglet 2 : Recherche (Séries & Films)
+            SearchView(profileId: profileId)
+                .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
+                .tag(2)
             
-            // Onglet 3
+            // Onglet 3 : Mes Films (NOUVEAU)
+            MoviesView(profileId: profileId)
+                .tabItem { Label("Films", systemImage: "popcorn") }
+                .tag(3)
+            
+            // Onglet 4 : Dashboard (Stats)
             DashboardView()
                 .tabItem { Label("Dashboard", systemImage: "chart.bar") }
-                .tag(3) // <--- TAG 3
+                .tag(4)
             
-            // Onglet 4
+            // Onglet 5 : Réglages (Déplacé ici pour accès facile au profil)
             SettingsView()
                 .tabItem { Label("Réglages", systemImage: "gear") }
-                .tag(4) // <--- TAG 4
+                .tag(5)
         }
         .accentColor(Color.accentPurple)
     }

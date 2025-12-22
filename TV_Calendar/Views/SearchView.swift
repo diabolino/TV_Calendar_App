@@ -8,18 +8,31 @@
 import SwiftUI
 import SwiftData
 
-// Enum pour les options de tri
+// Enum pour les options de tri (Gardé au cas où)
 enum SortOption: String, CaseIterable {
     case nameAZ = "Nom (A-Z)"
     case nameZA = "Nom (Z-A)"
     case status = "Par Statut"
 }
 
+// Enum pour le type de recherche (Nouveau)
+enum SearchScope: String, CaseIterable {
+    case shows = "Séries"
+    case movies = "Films"
+}
+
 struct SearchView: View {
-    @State private var searchText = ""
-    @State private var searchResults: [TVMazeService.ShowDTO] = []
+    // --- NOUVEAU : ID PROFIL ---
+    let profileId: String?
     
-    // État du tri
+    @State private var searchText = ""
+    @State private var searchScope: SearchScope = .shows
+    
+    // Résultats
+    @State private var showResults: [TVMazeService.ShowDTO] = []
+    @State private var movieResults: [TMDBService.TMDBMovieDetails] = [] // Nouveau
+    
+    // État du tri (pour la vue locale si besoin)
     @State private var sortOption: SortOption = .nameAZ
     
     // Réglage par défaut (stocké)
@@ -29,24 +42,26 @@ struct SearchView: View {
     
     @State private var selectedShowToAdd: TVMazeService.ShowDTO?
     @State private var showQualitySelection = false
+    @State private var isSearching = false
     
     @Environment(\.modelContext) private var modelContext
     @Query var libraryShows: [TVShow]
+    @Query var libraryMovies: [Movie] // Nouveau
     
     let columns = [GridItem(.adaptive(minimum: 100), spacing: 12)]
     
-    // LOGIQUE DE TRI DYNAMIQUE
+    // LOGIQUE DE TRI DYNAMIQUE (Pour l'affichage bibliothèque si vide)
     var sortedLibraryShows: [TVShow] {
+        // Filtre par profil d'abord
+        guard let pid = profileId, let uuid = UUID(uuidString: pid) else { return [] }
+        let myShows = libraryShows.filter { $0.profileId == uuid }
+        
         switch sortOption {
-        case .nameAZ:
-            return libraryShows.sorted { $0.name < $1.name }
-        case .nameZA:
-            return libraryShows.sorted { $0.name > $1.name }
+        case .nameAZ: return myShows.sorted { $0.name < $1.name }
+        case .nameZA: return myShows.sorted { $0.name > $1.name }
         case .status:
-            return libraryShows.sorted {
-                if ($0.status ?? "") == ($1.status ?? "") {
-                    return $0.name < $1.name
-                }
+            return myShows.sorted {
+                if ($0.status ?? "") == ($1.status ?? "") { return $0.name < $1.name }
                 return ($0.status ?? "") > ($1.status ?? "")
             }
         }
@@ -57,8 +72,8 @@ struct SearchView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     
-                    // --- BARRE DE RECHERCHE + TRI ---
-                    HStack {
+                    // --- BARRE DE RECHERCHE + SCOPE ---
+                    VStack(spacing: 12) {
                         HStack {
                             Image(systemName: "magnifyingglass").foregroundColor(.gray)
                             TextField("Rechercher...", text: $searchText)
@@ -69,40 +84,45 @@ struct SearchView: View {
                                 .onSubmit { performSearch(query: searchText); isSearchFocused = false }
                             
                             if !searchText.isEmpty {
-                                Button(action: { searchText = ""; isSearchFocused = false }) {
+                                Button(action: { searchText = ""; showResults = []; movieResults = []; isSearchFocused = false }) {
                                     Image(systemName: "xmark.circle.fill").foregroundColor(.gray)
                                 }
                             }
                         }
                         .padding().background(Color.cardBackground).cornerRadius(12)
                         
-                        // BOUTON DE TRI
-                        if searchText.isEmpty {
-                            Menu {
-                                Picker("Tri", selection: $sortOption) {
-                                    ForEach(SortOption.allCases, id: \.self) { option in
-                                        Text(option.rawValue).tag(option)
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "arrow.up.arrow.down.circle.fill")
-                                    .font(.system(size: 30))
-                                    .foregroundColor(.accentPurple)
-                                    .padding(.leading, 4)
+                        // SÉLECTEUR TYPE
+                        Picker("Type", selection: $searchScope) {
+                            ForEach(SearchScope.allCases, id: \.self) { scope in
+                                Text(scope.rawValue).tag(scope)
                             }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: searchScope) { _, _ in
+                            if !searchText.isEmpty { performSearch(query: searchText) }
                         }
                     }
                     .padding(.horizontal)
                     
                     // --- CONTENU ---
                     if searchText.isEmpty {
-                        // VUE BIBLIOTHÈQUE
-                        if !libraryShows.isEmpty {
+                        // VUE BIBLIOTHÈQUE (Vide ou liste rapide)
+                        if !sortedLibraryShows.isEmpty && searchScope == .shows {
                             HStack {
-                                Text("Ma Bibliothèque (\(libraryShows.count))")
+                                Text("Ma Bibliothèque (\(sortedLibraryShows.count))")
                                     .font(.title2).bold().foregroundColor(.white)
                                 Spacer()
-                                Text(sortOption.rawValue).font(.caption).foregroundColor(.gray)
+                                // Menu de tri (Optionnel ici)
+                                Menu {
+                                    Picker("Tri", selection: $sortOption) {
+                                        ForEach(SortOption.allCases, id: \.self) { option in
+                                            Text(option.rawValue).tag(option)
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                        .foregroundColor(.accentPurple)
+                                }
                             }
                             .padding(.horizontal)
                             
@@ -128,45 +148,62 @@ struct SearchView: View {
                             }
                             .padding(.horizontal)
                         } else {
-                            ContentUnavailableView("Bibliothèque vide", systemImage: "tv", description: Text("Recherchez une série ci-dessus pour commencer."))
+                            ContentUnavailableView("Recherche", systemImage: "magnifyingglass", description: Text("Recherchez des séries ou des films pour les ajouter."))
                                 .padding(.top, 50)
                         }
                     } else {
                         // VUE RÉSULTATS
-                        Text("Résultats").font(.title2).bold().foregroundColor(.white).padding(.horizontal)
-                        
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(searchResults, id: \.id) { show in
-                                let existingQualities = getQualitiesFor(showId: show.id)
-                                ShowGridItem(
-                                    title: show.name,
-                                    imageUrl: show.image?.medium,
-                                    quality: nil,
-                                    isAdded: !existingQualities.isEmpty,
-                                    progress: nil,
-                                    nextEpisodeCode: nil,
-                                    onQuickAdd: {
-                                        // CLIC SIMPLE : Ajout avec qualité par défaut
-                                        isSearchFocused = false
-                                        Task {
-                                            await LibraryManager.shared.addShow(
-                                                dto: show,
-                                                quality: defaultQuality, // Utilise le réglage
-                                                context: modelContext,
-                                                existingShows: libraryShows
-                                            )
-                                        }
-                                    },
-                                    onManualAdd: {
-                                        // APPUI LONG : Choix manuel
-                                        isSearchFocused = false
-                                        selectedShowToAdd = show
-                                        showQualitySelection = true
+                        if isSearching {
+                            ProgressView().frame(maxWidth: .infinity).padding(.top, 50)
+                        } else {
+                            Text("Résultats").font(.title2).bold().foregroundColor(.white).padding(.horizontal)
+                            
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                if searchScope == .shows {
+                                    ForEach(showResults, id: \.id) { show in
+                                        let qualities = getQualitiesFor(showId: show.id)
+                                        let isAdded = !qualities.isEmpty
+                                        
+                                        ShowGridItem(
+                                            title: show.name,
+                                            imageUrl: show.image?.medium,
+                                            quality: nil,
+                                            isAdded: isAdded,
+                                            progress: nil,
+                                            nextEpisodeCode: nil,
+                                            onQuickAdd: {
+                                                isSearchFocused = false
+                                                Task { await LibraryManager.shared.addShow(dto: show, quality: defaultQuality, profileId: profileId, context: modelContext, existingShows: libraryShows) }
+                                            },
+                                            onManualAdd: {
+                                                isSearchFocused = false
+                                                selectedShowToAdd = show
+                                                showQualitySelection = true
+                                            }
+                                        )
                                     }
-                                )
+                                } else {
+                                    // FILMS
+                                    ForEach(movieResults, id: \.id) { movie in
+                                        let isAdded = isMovieAdded(id: movie.id)
+                                        ShowGridItem(
+                                            title: movie.title,
+                                            imageUrl: TMDBService.imageURL(path: movie.poster_path, width: "w342"),
+                                            quality: nil,
+                                            isAdded: isAdded,
+                                            progress: nil,
+                                            nextEpisodeCode: nil,
+                                            onQuickAdd: {
+                                                isSearchFocused = false
+                                                Task { await LibraryManager.shared.addMovie(tmdbId: movie.id, profileId: profileId, context: modelContext, existingMovies: libraryMovies) }
+                                            },
+                                            onManualAdd: nil
+                                        )
+                                    }
+                                }
                             }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                     }
                 }
                 .padding(.vertical)
@@ -182,20 +219,12 @@ struct SearchView: View {
                 ForEach(VideoQuality.allCases, id: \.self) { quality in
                     Button(quality.rawValue) {
                         if let show = selectedShowToAdd {
-                            Task { await LibraryManager.shared.addShow(
-                                dto: show,
-                                quality: quality,
-                                context: modelContext,
-                                existingShows: libraryShows
-                            )}
+                            Task { await LibraryManager.shared.addShow(dto: show, quality: quality, profileId: profileId, context: modelContext, existingShows: libraryShows) }
                         }
                     }
                 }
                 Button("Annuler", role: .cancel) {}
             } message: { Text("Dans quelle qualité voulez-vous ajouter cette série ?") }
-        }
-        .onChange(of: searchText) { oldValue, newValue in
-            if newValue.isEmpty { searchResults = [] } else { performSearch(query: newValue) }
         }
     }
     
@@ -218,14 +247,29 @@ struct SearchView: View {
     }
 
     func getQualitiesFor(showId: Int) -> [VideoQuality] {
-        libraryShows.filter { $0.tvmazeId == showId }.map { $0.quality }
+        guard let pid = profileId, let uuid = UUID(uuidString: pid) else { return [] }
+        return libraryShows.filter { $0.tvmazeId == showId && $0.profileId == uuid }.map { $0.quality }
+    }
+    
+    func isMovieAdded(id: Int) -> Bool {
+        guard let pid = profileId, let uuid = UUID(uuidString: pid) else { return false }
+        return libraryMovies.contains { $0.tmdbId == id && $0.profileId == uuid }
     }
     
     func performSearch(query: String) {
-        guard !query.isEmpty else { searchResults = []; return }
+        guard !query.isEmpty else { showResults = []; movieResults = []; return }
+        isSearching = true
         Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
-            if let results = try? await TVMazeService.shared.searchShow(query: query) { searchResults = results }
+            if searchScope == .shows {
+                if let results = try? await TVMazeService.shared.searchShow(query: query) {
+                    await MainActor.run { showResults = results; isSearching = false }
+                }
+            } else {
+                if let results = try? await TMDBService.shared.searchMovie(query: query) {
+                    await MainActor.run { movieResults = results; isSearching = false }
+                }
+            }
         }
     }
     
@@ -233,7 +277,7 @@ struct SearchView: View {
         withAnimation { LibraryManager.shared.deleteShow(show, context: modelContext) }
     }
     
-    // --- CARTE AVEC DOUBLE ACTION (RETROUVÉE !) ---
+    // --- CARTE GRID ITEM (COMPLET) ---
     struct ShowGridItem: View {
         let title: String
         let imageUrl: String?
@@ -242,7 +286,6 @@ struct SearchView: View {
         let progress: Double?
         let nextEpisodeCode: String?
         
-        // On accepte deux actions distinctes
         let onQuickAdd: (() -> Void)?
         let onManualAdd: (() -> Void)?
         
@@ -252,6 +295,8 @@ struct SearchView: View {
                     PosterImage(urlString: imageUrl, width: nil, height: nil)
                         .aspectRatio(2/3, contentMode: .fill)
                         .frame(maxWidth: .infinity).clipped()
+                    
+                    // Badge prochain épisode
                     if let code = nextEpisodeCode {
                         Text(code)
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -259,10 +304,23 @@ struct SearchView: View {
                             .background(Color.cyan).foregroundColor(.white).cornerRadius(4)
                             .padding(6)
                     }
+                    
+                    // Check si ajouté (dans la recherche)
+                    if isAdded && onQuickAdd != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .padding(6)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
+                            .frame(maxWidth: .infinity, alignment: .topTrailing)
+                            .padding(4)
+                    }
                 }
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.caption).bold().foregroundColor(.white).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                     
+                    // Barre de progression (Bibliothèque)
                     if let prog = progress {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
@@ -273,27 +331,29 @@ struct SearchView: View {
                     }
                     
                     HStack {
-                        // SI MODE AJOUT (RECHERCHE)
-                        if let onQuick = onQuickAdd, let onManual = onManualAdd {
-                            Text("AJOUTER")
-                                .font(.system(size: 10, weight: .bold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(Color.accentPurple)
-                                .foregroundColor(.white)
-                                .cornerRadius(4)
-                                // GESTE 1 : Tap Simple -> Quick Add
-                                .onTapGesture {
-                                    HapticManager.shared.trigger(.light)
-                                    onQuick()
-                                }
-                                // GESTE 2 : Long Press -> Manual Add
-                                .onLongPressGesture(minimumDuration: 0.5) {
-                                    HapticManager.shared.trigger(.heavy)
-                                    onManual()
-                                }
+                        // MODE RECHERCHE
+                        if let onQuick = onQuickAdd {
+                            if !isAdded {
+                                Text("AJOUTER")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                                    .background(Color.accentPurple)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(4)
+                                    .onTapGesture {
+                                        HapticManager.shared.trigger(.light)
+                                        onQuick()
+                                    }
+                                    .onLongPressGesture(minimumDuration: 0.5) {
+                                        if let onManual = onManualAdd {
+                                            HapticManager.shared.trigger(.heavy)
+                                            onManual()
+                                        }
+                                    }
+                            }
                         }
-                        // SI MODE BIBLIOTHÈQUE
+                        // MODE BIBLIOTHEQUE
                         else {
                             if let q = quality {
                                 Text(q.rawValue).font(.system(size: 9, weight: .bold)).padding(.horizontal, 6).padding(.vertical, 2).background(qualityColor(q).opacity(0.2)).foregroundColor(qualityColor(q)).cornerRadius(3).overlay(RoundedRectangle(cornerRadius: 3).stroke(qualityColor(q), lineWidth: 1))
@@ -307,6 +367,7 @@ struct SearchView: View {
             }
             .cornerRadius(8).shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
         }
+        
         func qualityColor(_ q: VideoQuality) -> Color {
             switch q { case .sd: return .orange; case .hd720: return .blue; case .hd1080: return .green; case .uhd4k: return .purple }
         }

@@ -1,43 +1,58 @@
+//
+//  LibraryManager.swift
+//  TV_Calendar
+//
+//  Created by Gouard matthieu on 26/11/2025.
+//  Updated for Movies, Profiles & TheTVDB Fallback
+//
+
 import Foundation
 import SwiftData
 import SwiftUI
 
-// Ce singleton gère toute la logique de modification de la base de données
 class LibraryManager {
     static let shared = LibraryManager()
     
     // --- AJOUT D'UNE SÉRIE ---
     @MainActor
-    func addShow(dto: TVMazeService.ShowDTO, quality: VideoQuality, context: ModelContext, existingShows: [TVShow]) async {
+    func addShow(dto: TVMazeService.ShowDTO, quality: VideoQuality, profileId: String?, context: ModelContext, existingShows: [TVShow]) async {
         
-        // 1. Vérification doublons (CORRIGÉE)
-        // On compare directement l'Enum ($0.quality) avec l'Enum (quality)
-        // On a retiré .rawValue qui causait l'erreur
-        if existingShows.contains(where: { $0.tvmazeId == dto.id && $0.quality == quality }) {
-            print("⚠️ Cette version existe déjà.")
-            // AJOUT :
-            ToastManager.shared.show("Cette série est déjà dans votre bibliothèque", style: .error)
+        let profileUUID = profileId != nil ? UUID(uuidString: profileId!) : nil
+        
+        // 1. Vérification doublons (pour CE profil)
+        if existingShows.contains(where: { $0.tvmazeId == dto.id && $0.profileId == profileUUID }) {
+            ToastManager.shared.show("Cette série est déjà dans ce profil", style: .error)
             return
         }
         
-        print("📥 Début de l'ajout : \(dto.name)")
-        // AJOUT :
-        ToastManager.shared.show("Ajout de \(dto.name) en cours...", style: .info)
+        ToastManager.shared.show("Ajout de \(dto.name)...", style: .info)
         
-        // 2. Infos Fraiches (TVMaze Update)
+        // 2. Récupération détails TVMaze (Mise à jour IDs)
         var finalBannerUrl: String? = nil
         var finalNetwork = dto.network?.name ?? dto.webChannel?.name
         var finalStatus = dto.status
         var imdbIdForSearch: String? = dto.externals?.imdb
+        var thetvdbId: Int? = dto.externals?.thetvdb
         
         if let details = try? await TVMazeService.shared.fetchShowWithImages(id: dto.id) {
             finalBannerUrl = TVMazeService.shared.extractBanner(from: details)
             finalNetwork = details.network?.name ?? details.webChannel?.name
             finalStatus = details.status
             imdbIdForSearch = details.externals?.imdb
+            thetvdbId = details.externals?.thetvdb
         }
         
-        // 3. Enrichissement TMDB
+        // --- LOGIQUE FALLBACK BANNIÈRE TheTVDB ---
+        if finalBannerUrl == nil, let tvdbId = thetvdbId {
+            print("⚠️ Pas de bannière TVMaze. Tentative via TheTVDB...")
+            if let tvdbBanner = await TheTVDBService.shared.fetchBanner(thetvdbId: tvdbId) {
+                finalBannerUrl = tvdbBanner
+                print("✅ Bannière trouvée sur TheTVDB !")
+            }
+        }
+        // -----------------------------------------
+        
+        // 3. Enrichissement TMDB (Description FR + Poster HQ)
         var finalOverview = dto.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression) ?? ""
         var finalImage = dto.image?.original ?? dto.image?.medium
         var tmdbId: Int? = nil
@@ -61,8 +76,11 @@ class LibraryManager {
             bannerUrl: finalBannerUrl,
             network: finalNetwork,
             status: finalStatus,
-            quality: quality // Ici c'est bon, l'init attend bien un VideoQuality
+            quality: quality,
+            profileId: profileUUID
         )
+        newShow.tmdbId = tmdbId
+        newShow.imdbId = imdbIdForSearch
         context.insert(newShow)
         
         // 5. Episodes
@@ -129,17 +147,68 @@ class LibraryManager {
             }
         }
         
-        print("✅ Série ajoutée avec succès : \(dto.name)")
-        // AJOUT :
-        ToastManager.shared.show("\(dto.name) ajoutée avec succès !", style: .success)
-
+        ToastManager.shared.show("\(dto.name) ajoutée !", style: .success)
+    }
+    
+    // --- AJOUT D'UN FILM ---
+    @MainActor
+    func addMovie(tmdbId: Int, profileId: String?, context: ModelContext, existingMovies: [Movie]) async {
+        let profileUUID = profileId != nil ? UUID(uuidString: profileId!) : nil
+        
+        if existingMovies.contains(where: { $0.tmdbId == tmdbId && $0.profileId == profileUUID }) {
+            ToastManager.shared.show("Ce film est déjà dans votre liste", style: .error)
+            return
+        }
+        
+        ToastManager.shared.show("Récupération du film...", style: .info)
+        
+        guard let details = try? await TMDBService.shared.fetchMovieDetails(id: tmdbId) else {
+            ToastManager.shared.show("Erreur récupération film", style: .error)
+            return
+        }
+        
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
+        let releaseDate = details.release_date != nil ? formatter.date(from: details.release_date!) : nil
+        
+        let newMovie = Movie(
+            tmdbId: details.id,
+            title: details.title,
+            overview: details.overview ?? "",
+            posterUrl: TMDBService.imageURL(path: details.poster_path),
+            releaseDate: releaseDate,
+            profileId: profileUUID
+        )
+        newMovie.originalTitle = details.original_title
+        newMovie.backdropUrl = TMDBService.imageURL(path: details.backdrop_path, width: "original")
+        newMovie.runtime = details.runtime
+        newMovie.rating = details.vote_average
+        
+        context.insert(newMovie)
+        
+        // Casting Film
+        if let cast = try? await TMDBService.shared.fetchMovieCast(id: tmdbId) {
+            for c in cast.prefix(8) {
+                let actor = CastMember(personId: c.id, name: c.name, characterName: c.character ?? "Inconnu", imageUrl: TMDBService.imageURL(path: c.profile_path, width: "w185"))
+                actor.movie = newMovie
+                context.insert(actor)
+            }
+        }
+        
+        ToastManager.shared.show("\(details.title) ajouté !", style: .success)
     }
     
     // --- SUPPRESSION ---
     @MainActor
     func deleteShow(_ show: TVShow, context: ModelContext) {
-        let name = show.name // On garde le nom avant de supprimer
+        let name = show.name
         context.delete(show)
         ToastManager.shared.show("\(name) supprimée", style: .error)
+    }
+    
+    @MainActor
+    func deleteMovie(_ movie: Movie, context: ModelContext) {
+        let title = movie.title
+        context.delete(movie)
+        ToastManager.shared.show("\(title) supprimé", style: .error)
     }
 }
