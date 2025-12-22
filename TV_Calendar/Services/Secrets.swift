@@ -13,10 +13,10 @@ struct Secrets {
     
     // NOUVEAU : TheTVDB (Nécessaire pour le fallback bannière)
     // Obtenez une clé ici : https://thetvdb.com/api-information
-    static let tvdbApiKey = "3bd317ae-c2ed-410c-af87-87995d383b4b"
+    static let tvdbApiKey = "b764b6be-6b8f-4651-aaf9-f58e891dcce5"
     
     // NOUVEAU : Trakt (Client ID pour la synchro)
     // Obtenez une clé ici : https://trakt.tv/oauth/applications
-    static let traktClientId = "e12e9cf0e13c518960af73246b1934191335410a74887eca63d2bb7ca1a98d25"
-    static let traktClientSecret = "a39a83144f83d424eaa272c54b92a9d3f77d0ec8e8bd31e8677c4a3959796542"
+    static let traktClientId = "bf02515b75340b1248ba4641bf675bd7a354609754f15c9c7f1e7ecb4376c8f6"
+    static let traktClientSecret = "18d6917c1dea0a4fa7167540ddc56f2d2d400dcde4f1e6fcc3ad3cba1944c529"
 }

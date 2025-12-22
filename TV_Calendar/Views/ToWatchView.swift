@@ -232,9 +232,27 @@ struct ToWatchCard: View {
                     }
                 }.frame(height: 4)
                 
+                // Dans ToWatchCard (bas du fichier)
+
                 Button(action: {
                     HapticManager.shared.trigger(.medium)
+                    
+                    // 1. Action Locale
                     withAnimation { episode.toggleWatched() }
+                    
+                    // 2. Action Trakt (NOUVEAU)
+                    if episode.isWatched {
+                        print("🚀 ToWatchView: Envoi Trakt pour \(episode.title)")
+                        Task {
+                            await TraktService.shared.markEpisodeWatched(
+                                imdbId: episode.show?.imdbId,
+                                tmdbId: episode.show?.tmdbId,
+                                title: episode.show?.name,
+                                season: episode.season,
+                                number: episode.number
+                            )
+                        }
+                    }
                 }) {
                     HStack {
                         Image(systemName: "checkmark")

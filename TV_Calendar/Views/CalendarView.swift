@@ -134,3 +134,42 @@ struct CalendarView: View {
         }
     }
 }
+
+struct EpisodeListView: View {
+    let episodes: [Episode]
+    
+    var body: some View {
+        if episodes.isEmpty {
+            ContentUnavailableView("Aucun épisode", systemImage: "calendar.badge.exclamationmark", description: Text("Rien de prévu pour le moment."))
+                .padding(.top, 50)
+        } else {
+            List(episodes) { episode in
+                HStack(spacing: 12) {
+                    PosterImage(urlString: episode.show?.imageUrl, width: 60, height: 90)
+                        .cornerRadius(6)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(episode.show?.name ?? "Série Inconnue")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text("\(episode.season)x\(String(format: "%02d", episode.number)) - \(episode.title)")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                        
+                        if let date = episode.airDate {
+                            Text(date.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption)
+                                .foregroundColor(.accentPurple)
+                        }
+                    }
+                }
+                .listRowBackground(Color.appBackground)
+                .listRowSeparatorTint(Color.white.opacity(0.1))
+            }
+            .listStyle(.plain)
+            .background(Color.appBackground)
+        }
+    }
+}

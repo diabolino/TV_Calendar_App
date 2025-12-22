@@ -29,7 +29,8 @@ struct TVMazeService {
     }
     
     struct ExternalsDTO: Decodable {
-        let imdb: String? // C'est la clé de liaison !
+            let imdb: String?
+            let thetvdb: Int? // <--- C'est cette ligne qui manquait !
     }
     
     struct NetworkDTO: Decodable {

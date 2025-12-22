@@ -3,21 +3,26 @@
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 26/11/2025.
+//  Updated for Multi-User & Movies
 //
 
 import SwiftUI
 
 struct SidebarView: View {
+    // On doit recevoir l'ID du profil pour le passer aux vues enfants
+    let profileId: String?
+    
     var body: some View {
         NavigationSplitView {
             List {
                 // Section 1 : Votre activité
                 Section("Mon Suivi") {
-                    NavigationLink(destination: ToWatchView(selectedTab: nil)) {
+                    // CORRECTION : On passe profileId, et on retire selectedTab qui n'existe plus
+                    NavigationLink(destination: ToWatchView(profileId: profileId)) {
                         Label("À voir", systemImage: "play.tv")
                     }
                     
-                    NavigationLink(destination: CalendarView()) {
+                    NavigationLink(destination: CalendarView(profileId: profileId)) {
                         Label("Calendrier", systemImage: "calendar")
                     }
                     
@@ -28,17 +33,24 @@ struct SidebarView: View {
                 
                 // Section 2 : Bibliothèque & Recherche
                 Section("Collection") {
-                    NavigationLink(destination: SearchView()) {
-                        Label("Séries", systemImage: "square.grid.2x2")
+                    NavigationLink(destination: SearchView(profileId: profileId)) {
+                        Label("Explorer", systemImage: "magnifyingglass")
+                    }
+                }
+                
+                // Section 3 : Paramètres
+                Section("Système") {
+                    NavigationLink(destination: SettingsView()) {
+                        Label("Réglages", systemImage: "gear")
                     }
                 }
             }
-            .listStyle(.sidebar) // Style natif macOS (translucide)
+            .listStyle(.sidebar)
             .navigationTitle("TV Tracker")
             
         } detail: {
-            // Vue par défaut au lancement sur Mac
-            ToWatchView(selectedTab: nil)
+            // Vue par défaut au lancement sur Mac/iPad
+            ToWatchView(profileId: profileId)
         }
     }
 }

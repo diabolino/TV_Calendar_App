@@ -200,19 +200,35 @@ struct ShowHeatmap: View {
         }
     }
     
+    // Dans ShowHeatmap.swift
+        
     func handleTap(on targetEpisode: Episode) {
         HapticManager.shared.trigger(.light)
+        
         withAnimation(.snappy) {
             if !targetEpisode.isWatched {
+                // CAS 1 : Marquer comme VU (et potentiellement les précédents)
                 for ep in episodesToDisplay {
-                    if ep.number <= targetEpisode.number {
-                        if !ep.isWatched {
-                            ep.isWatched = true
-                            ep.watchedDate = Date()
+                    // On ne touche que ceux avant ou égal à la cible qui n'étaient pas vus
+                    if ep.number <= targetEpisode.number && !ep.isWatched {
+                        ep.isWatched = true
+                        ep.watchedDate = Date()
+                        
+                        // ENVOI TRAKT
+                        Task {
+                            await TraktService.shared.markEpisodeWatched(
+                                imdbId: ep.show?.imdbId,
+                                tmdbId: ep.show?.tmdbId,
+                                title: ep.show?.name,
+                                season: ep.season,
+                                number: ep.number
+                            )
                         }
                     }
                 }
             } else {
+                // CAS 2 : Décocher (Non vu)
+                // Pour l'instant on gère juste le local, car l'API "Remove History" n'est pas implémentée
                 targetEpisode.isWatched = false
                 targetEpisode.watchedDate = nil
             }

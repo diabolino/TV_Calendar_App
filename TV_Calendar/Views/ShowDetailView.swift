@@ -362,7 +362,22 @@ struct DetailEpisodeRow: View {
                 // Bouton Vu
                 Button(action: {
                     HapticManager.shared.trigger(.medium)
+                    
+                    // 1. Action locale (Immédiate)
                     withAnimation { episode.toggleWatched() }
+                    
+                    // 2. Sync Trakt (Si activé)
+                    if episode.isWatched {
+                        Task {
+                            // On envoie l'info à Trakt en arrière-plan
+                            await TraktService.shared.markEpisodeWatched(
+                                imdbId: episode.show?.imdbId,
+                                title: episode.show?.name,
+                                season: episode.season,
+                                number: episode.number
+                            )
+                        }
+                    }
                 }) {
                     Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(episode.isWatched ? Color.green : Color.gray.opacity(0.5))

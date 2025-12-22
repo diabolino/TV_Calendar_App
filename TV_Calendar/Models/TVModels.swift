@@ -3,7 +3,7 @@
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 26/11/2025.
-//  Updated for Movies & Multi-User
+//  Updated for Movies & Multi-User (Fixed for SwiftData Macro)
 //
 
 import SwiftData
@@ -66,6 +66,7 @@ class TVShow {
     var network: String? = nil
     var status: String? = nil
     
+    // CORRECTION ICI : Utilisation du type complet VideoQuality.hd1080
     var quality: VideoQuality = VideoQuality.hd1080
     var lastUpdatedTimestamp: Int = 0
     
@@ -139,11 +140,13 @@ class Movie {
     var releaseDate: Date? = nil
     var runtime: Int? = 0 // minutes
     
-    var status: WatchStatus = .toWatch
+    // CORRECTION ICI : Utilisation du type complet WatchStatus.toWatch
+    var status: WatchStatus = WatchStatus.toWatch
     var watchedDate: Date? = nil
     var rating: Double? = nil // Votre note persos ou TMDB
     
-    var quality: VideoQuality = .hd1080
+    // CORRECTION ICI : Utilisation du type complet VideoQuality.hd1080
+    var quality: VideoQuality = VideoQuality.hd1080
     
     @Relationship(deleteRule: .cascade) var cast: [CastMember]? = []
     

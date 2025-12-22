@@ -25,13 +25,12 @@ struct ContentView: View {
             // --- CONTENU PRINCIPAL ---
             Group {
                 #if os(macOS)
-                    SidebarView() // Note: Il faudra adapter SidebarView plus tard si tu l'utilises sur Mac
+                    SidebarView(profileId: currentProfileId) // <--- ICI
                 #else
                     if sizeClass == .compact {
-                        // On passe l'ID du profil à la TabView
                         TabNavigationView(selectedTab: $selectedTab, profileId: currentProfileId)
                     } else {
-                        SidebarView()
+                        SidebarView(profileId: currentProfileId) // <--- ET ICI
                     }
                 #endif
             }
@@ -50,13 +49,13 @@ struct ContentView: View {
 
 struct TabNavigationView: View {
     @Binding var selectedTab: Int
-    let profileId: String? // NOUVEAU
+    let profileId: String?
     
     init(selectedTab: Binding<Int>, profileId: String?) {
         self._selectedTab = selectedTab
         self.profileId = profileId
         
-        // Customisation TabBar (Code Original)
+        // Customisation TabBar
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(Color.appBackground)
@@ -67,7 +66,7 @@ struct TabNavigationView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             
-            // Onglet 0 : À voir
+            // Onglet 0 : À voir (Séries uniquement pour l'instant)
             ToWatchView(profileId: profileId)
                 .tabItem { Label("À voir", systemImage: "play.tv") }
                 .tag(0)
@@ -77,25 +76,22 @@ struct TabNavigationView: View {
                 .tabItem { Label("Calendrier", systemImage: "calendar") }
                 .tag(1)
             
-            // Onglet 2 : Recherche (Séries & Films)
+            // Onglet 2 : Explorer (Recherche + Bibliothèque Séries/Films)
             SearchView(profileId: profileId)
                 .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
                 .tag(2)
             
-            // Onglet 3 : Mes Films (NOUVEAU)
-            MoviesView(profileId: profileId)
-                .tabItem { Label("Films", systemImage: "popcorn") }
-                .tag(3)
+            // --- ONGLET 3 SUPPRIMÉ ---
             
-            // Onglet 4 : Dashboard (Stats)
+            // Onglet 4 -> Devient 3 : Dashboard (Stats)
             DashboardView()
                 .tabItem { Label("Dashboard", systemImage: "chart.bar") }
-                .tag(4)
+                .tag(3) // Changé de 4 à 3
             
-            // Onglet 5 : Réglages (Déplacé ici pour accès facile au profil)
+            // Onglet 5 -> Devient 4 : Réglages
             SettingsView()
                 .tabItem { Label("Réglages", systemImage: "gear") }
-                .tag(5)
+                .tag(4) // Changé de 5 à 4
         }
         .accentColor(Color.accentPurple)
     }

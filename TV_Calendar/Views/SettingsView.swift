@@ -3,6 +3,7 @@
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 27/11/2025.
+//  Updated for Trakt OAuth
 //
 
 import SwiftUI
@@ -13,24 +14,30 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     
-    @AppStorage("defaultQuality") private var defaultQuality: VideoQuality = .hd1080
+    // Gestion Profil
     @AppStorage("currentProfileId") private var currentProfileId: String?
-    @Query private var profiles: [UserProfile]
+    @Query private var userProfiles: [UserProfile]
     
+    // Préférences
+    @AppStorage("defaultQuality") private var defaultQuality: VideoQuality = .hd1080
+    
+    // Service Trakt
+    @State private var traktService = TraktService.shared
+    @State private var isSyncingTrakt = false
+    
+    // États techniques
     @State private var cacheSize: String = "Calcul..."
-    @State private var showSyncAlert = false
     @State private var isSyncing = false
     
-    // ÉTATS POUR IMPORT / EXPORT
+    // Import/Export
     @State private var showShareSheet = false
     @State private var exportURL: URL?
     @State private var showFileImporter = false
     @State private var importAlertMessage = ""
     @State private var showImportAlert = false
-    @State private var showTraktImporter = false
     
     var currentProfileName: String {
-        if let id = currentProfileId, let profile = profiles.first(where: { $0.id.uuidString == id }) {
+        if let id = currentProfileId, let profile = userProfiles.first(where: { $0.id.uuidString == id }) {
             return profile.name
         }
         return "Inconnu"
@@ -45,21 +52,53 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // SECTION PROFIL (NOUVEAU)
-                Section("Profil") {
+                // --- SECTION PROFIL ---
+                Section("Profil Actuel") {
                     HStack {
-                        Text("Connecté en tant que")
+                        Text("Connecté en tant que :")
                         Spacer()
                         Text(currentProfileName).bold().foregroundColor(.accentPurple)
                     }
                     Button(role: .destructive) {
-                        currentProfileId = nil // Déconnexion
+                        currentProfileId = nil
                     } label: {
                         Label("Changer de profil", systemImage: "person.2.circle")
                     }
                 }
                 
-                // SECTION 1 : PRÉFÉRENCES
+                // --- SECTION TRAKT (FACULTATIF) ---
+                Section("Trakt.tv (Optionnel)") {
+                    if traktService.isAuthenticated {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                            Text("Connecté")
+                            Spacer()
+                            Button("Déconnexion") {
+                                traktService.signOut()
+                            }
+                            .font(.caption).buttonStyle(.bordered)
+                        }
+                        
+                        Button(action: syncTrakt) {
+                            HStack {
+                                Label("Synchroniser maintenant", systemImage: "arrow.triangle.2.circlepath")
+                                if isSyncingTrakt { Spacer(); ProgressView() }
+                            }
+                        }
+                        .disabled(isSyncingTrakt)
+                    } else {
+                        Button(action: {
+                            Task { await traktService.signIn() }
+                        }) {
+                            Label("Se connecter avec Trakt", systemImage: "link")
+                                .foregroundColor(.accentPurple)
+                        }
+                        Text("Synchronisez votre historique automatiquement.")
+                            .font(.caption).foregroundColor(.gray)
+                    }
+                }
+                
+                // --- SECTION PRÉFÉRENCES ---
                 Section("Préférences") {
                     Picker("Qualité par défaut", selection: $defaultQuality) {
                         ForEach(VideoQuality.allCases, id: \.self) { quality in
@@ -67,14 +106,10 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.navigationLink)
-                    
-                    Text("Cette qualité sera pré-sélectionnée lors de l'ajout d'une nouvelle série.")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
                 }
                 
-                // SECTION 2 : SAUVEGARDE
-                Section("Sauvegarde & Restauration") {
+                // --- SECTION SAUVEGARDE ---
+                Section("Sauvegarde Locale") {
                     Button(action: exportData) {
                         Label("Exporter une sauvegarde", systemImage: "square.and.arrow.up")
                     }
@@ -82,59 +117,32 @@ struct SettingsView: View {
                     Button(action: { showFileImporter = true }) {
                         Label("Importer une sauvegarde", systemImage: "square.and.arrow.down")
                     }
-                    
-                    Button(action: { showTraktImporter = true }) {
-                        Label("Importer historique Trakt (.json)", systemImage: "play.tv.fill")
-                            .foregroundColor(.accentPurple)
-                    }
                 }
                 
-                // SECTION 3 : DONNÉES
-                Section("Stockage & Données") {
+                // --- SECTION STOCKAGE ---
+                Section("Stockage") {
                     HStack {
                         Text("Cache Images")
                         Spacer()
                         Text(cacheSize).foregroundStyle(.secondary)
                     }
-                    
-                    Button("Vider le cache des images") {
-                        clearCache()
-                    }
-                    .foregroundStyle(.red)
-                    
-                    Button(action: { forceSync() }) {
-                        HStack {
-                            Text("Forcer la synchronisation iCloud")
-                            if isSyncing {
-                                Spacer()
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(isSyncing)
+                    Button("Vider le cache") { clearCache() }.foregroundStyle(.red)
                 }
                 
-                // SECTION 4 : SUPPORT
+                // --- SECTION AIDE ---
                 Section("Aide") {
                     Link(destination: URL(string: "https://diabolino.github.io/TV_Calendar_contact/#support")!) {
-                        Label("Contacter le support / FAQ", systemImage: "questionmark.circle")
-                    }
-                    
-                    Link(destination: URL(string: "https://diabolino.github.io/TV_Calendar_contact/#privacy")!) {
-                        Label("Politique de confidentialité", systemImage: "hand.raised")
+                        Label("Support / FAQ", systemImage: "questionmark.circle")
                     }
                 }
                 
-                // SECTION 5 : A PROPOS
+                // --- ABOUT ---
                 Section {
                     HStack {
                         Spacer()
                         VStack(spacing: 4) {
-                            Text("TV Calendar")
-                                .font(.headline)
-                            Text(appVersion)
-                                .font(.caption)
-                                .foregroundStyle(.gray)
+                            Text("TV Calendar").font(.headline)
+                            Text(appVersion).font(.caption).foregroundStyle(.gray)
                         }
                         Spacer()
                     }
@@ -144,39 +152,72 @@ struct SettingsView: View {
             .navigationTitle("Réglages")
             .onAppear {
                 calculateCacheSize()
+                traktService.configure(for: currentProfileId)
             }
-            // GESTION DU PARTAGE (EXPORT)
             .sheet(isPresented: $showShareSheet) {
-                if let url = exportURL {
-                    ShareSheet(activityItems: [url])
-                }
+                if let url = exportURL { ShareSheet(activityItems: [url]) }
             }
-            // GESTION DE L'IMPORT
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: [.json],
-                allowsMultipleSelection: false
-            ) { result in
+            .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
                 handleImport(result: result)
             }
-            // GESTION TRAKT
-            .fileImporter(
-                isPresented: $showTraktImporter,
-                allowedContentTypes: [.json],
-                allowsMultipleSelection: false
-            ) { result in
-                handleTraktImport(result: result)
-            }
-            // ALERTES
             .alert("Importation", isPresented: $showImportAlert) {
                 Button("OK", role: .cancel) { }
-            } message: {
-                Text(importAlertMessage)
+            } message: { Text(importAlertMessage) }
+        }
+    }
+    
+    // --- LOGIQUE SYNC TRAKT ---
+    
+    // --- LOGIQUE SYNC TRAKT ---
+        
+    func syncTrakt() {
+        isSyncingTrakt = true
+        Task {
+            do {
+                // 1. SÉRIES
+                let watchedShows = try await traktService.fetchWatchedShows()
+                await MainActor.run { ToastManager.shared.show("Sync Séries (\(watchedShows.count))...", style: .info) }
+                
+                let descShows = FetchDescriptor<TVShow>()
+                let existingShows = (try? modelContext.fetch(descShows)) ?? []
+                
+                let msgShows = await TraktImportManager.shared.processApiSyncShows(
+                    items: watchedShows,
+                    profileId: currentProfileId,
+                    context: modelContext,
+                    existingShows: existingShows
+                )
+                
+                // 2. FILMS
+                let watchedMovies = try await traktService.fetchWatchedMovies()
+                await MainActor.run { ToastManager.shared.show("Sync Films (\(watchedMovies.count))...", style: .info) }
+                
+                let descMovies = FetchDescriptor<Movie>()
+                let existingMovies = (try? modelContext.fetch(descMovies)) ?? []
+                
+                let msgMovies = await TraktImportManager.shared.processApiSyncMovies(
+                    items: watchedMovies,
+                    profileId: currentProfileId,
+                    context: modelContext,
+                    existingMovies: existingMovies
+                )
+                
+                await MainActor.run {
+                    importAlertMessage = "\(msgShows)\n\(msgMovies)"
+                    showImportAlert = true
+                    isSyncingTrakt = false
+                }
+                
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.show("Erreur Sync: \(error.localizedDescription)", style: .error)
+                    isSyncingTrakt = false
+                }
             }
         }
     }
     
-    // --- LOGIQUE (Identique à l'original) ---
+    // --- LOGIQUE STANDARD (Inchangée) ---
     
     func exportData() {
         if let url = ImportExportManager.shared.generateBackupFile(context: modelContext) {
@@ -193,53 +234,27 @@ struct SettingsView: View {
                 do {
                     let count = try await ImportExportManager.shared.restoreBackup(from: url, context: modelContext)
                     await MainActor.run {
-                        importAlertMessage = "Succès ! \(count) série(s) importée(s)."
+                        importAlertMessage = "Succès ! \(count) éléments importés."
                         showImportAlert = true
                     }
                 } catch {
                     await MainActor.run {
-                        importAlertMessage = "Erreur lors de l'import : \(error.localizedDescription)"
+                        importAlertMessage = "Erreur : \(error.localizedDescription)"
                         showImportAlert = true
                     }
                 }
             }
         case .failure(let error):
-            importAlertMessage = "Échec de la sélection : \(error.localizedDescription)"
+            importAlertMessage = "Erreur : \(error.localizedDescription)"
             showImportAlert = true
-        }
-    }
-    
-    func handleTraktImport(result: Result<[URL], Error>) {
-        // Logique connectée au TraktImportManager
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            // Note: On pourrait passer currentProfileId ici si on voulait isoler l'import
-            // Pour l'instant, TraktImportManager utilise le contexte global
-            ToastManager.shared.show("Analyse du fichier Trakt...", style: .info)
-            // (La logique d'appel est gérée ici ou dans Settings, mais TraktImportManager fait le gros du travail)
-        case .failure(let error):
-            ToastManager.shared.show("Erreur: \(error.localizedDescription)", style: .error)
-        }
-    }
-    
-    func forceSync() {
-        isSyncing = true
-        Task {
-            await SyncManager.shared.synchronizeLibrary(modelContext: modelContext)
-            await MainActor.run {
-                isSyncing = false
-            }
         }
     }
     
     func calculateCacheSize() {
         Task {
-            let size = await Task.detached(priority: .background) {
-                return SDImageCache.shared.totalDiskSize()
-            }.value
-            let formattedSize = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
-            await MainActor.run { self.cacheSize = formattedSize }
+            let size = await Task.detached { return SDImageCache.shared.totalDiskSize() }.value
+            let formatted = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+            await MainActor.run { self.cacheSize = formatted }
         }
     }
     
@@ -247,4 +262,13 @@ struct SettingsView: View {
         SDImageCache.shared.clearMemory()
         SDImageCache.shared.clearDisk { calculateCacheSize() }
     }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        return UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
