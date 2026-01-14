@@ -3,7 +3,7 @@
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 27/11/2025.
-//  Updated for Trakt OAuth
+//  Updated for Banner Maintenance Tool (Fixed for upgrade existing banners)
 //
 
 import SwiftUI
@@ -25,9 +25,11 @@ struct SettingsView: View {
     @State private var traktService = TraktService.shared
     @State private var isSyncingTrakt = false
     
-    // États techniques
+    // États techniques & Maintenance
     @State private var cacheSize: String = "Calcul..."
     @State private var isSyncing = false
+    @State private var isCheckingBanners = false
+    @State private var bannerCheckStatus = ""
     
     // Import/Export
     @State private var showShareSheet = false
@@ -95,6 +97,33 @@ struct SettingsView: View {
                         }
                         Text("Synchronisez votre historique automatiquement.")
                             .font(.caption).foregroundColor(.gray)
+                    }
+                }
+                
+                // --- SECTION MAINTENANCE (MISE À JOUR) ---
+                Section("Maintenance") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button(action: checkForMissingBanners) {
+                            HStack {
+                                Label("Mettre à jour les bannières", systemImage: "photo.stack.fill")
+                                if isCheckingBanners {
+                                    Spacer()
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        .disabled(isCheckingBanners)
+                        
+                        if !bannerCheckStatus.isEmpty {
+                            Text(bannerCheckStatus)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .transition(.opacity)
+                        } else {
+                            Text("Vérifie toutes vos séries pour trouver les bannières optimales (758x140).")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
                     }
                 }
                 
@@ -166,7 +195,77 @@ struct SettingsView: View {
         }
     }
     
-    // --- LOGIQUE SYNC TRAKT ---
+    // --- LOGIQUE MAINTENANCE BANNIÈRES ---
+    
+    func checkForMissingBanners() {
+        isCheckingBanners = true
+        bannerCheckStatus = "Analyse de la bibliothèque..."
+        
+        Task {
+            do {
+                // 1. Récupérer TOUTES les séries (plus de filtre nil)
+                let descriptor = FetchDescriptor<TVShow>()
+                let allShows = try modelContext.fetch(descriptor)
+                
+                if allShows.isEmpty {
+                    await MainActor.run {
+                        bannerCheckStatus = "Aucune série dans la bibliothèque."
+                        isCheckingBanners = false
+                    }
+                    return
+                }
+                
+                var updatedCount = 0
+                let total = allShows.count
+                
+                await MainActor.run { bannerCheckStatus = "🔍 Analyse de \(total) séries..." }
+                
+                // 2. Boucle de vérification
+                for (index, show) in allShows.enumerated() {
+                    
+                    await MainActor.run { bannerCheckStatus = "(\(index+1)/\(total)) Vérification : \(show.name)..." }
+                    
+                    // Appel API (fetchShowWithImages inclut les images embed)
+                    if let details = try? await TVMazeService.shared.fetchShowWithImages(id: show.tvmazeId) {
+                        
+                        [cite_start]// La fonction extractBanner cherche spécifiquement 758x140 en priorité. [cite: 362]
+                        if let optimalBanner = TVMazeService.shared.extractBanner(from: details) {
+                            
+                            // Si l'URL trouvée est différente de l'actuelle (ou si l'actuelle était vide)
+                            if show.bannerUrl != optimalBanner {
+                                show.bannerUrl = optimalBanner
+                                updatedCount += 1
+                                print("✨ Bannière optimisée pour \(show.name)")
+                            }
+                        }
+                    }
+                    
+                    // Petit délai pour respecter l'API Rate Limiting de TVMaze
+                    try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                }
+                
+                // 3. Sauvegarde finale
+                try? modelContext.save()
+                
+                await MainActor.run {
+                    isCheckingBanners = false
+                    bannerCheckStatus = updatedCount > 0
+                        ? "🎉 \(updatedCount) bannières mises à jour !"
+                        : "Toutes les bannières sont déjà optimales."
+                    
+                    if updatedCount > 0 {
+                        ToastManager.shared.show("\(updatedCount) images optimisées", style: .success)
+                    }
+                }
+                
+            } catch {
+                await MainActor.run {
+                    isCheckingBanners = false
+                    bannerCheckStatus = "Erreur : \(error.localizedDescription)"
+                }
+            }
+        }
+    }
     
     // --- LOGIQUE SYNC TRAKT ---
         
@@ -234,7 +333,7 @@ struct SettingsView: View {
                 do {
                     let count = try await ImportExportManager.shared.restoreBackup(from: url, context: modelContext)
                     await MainActor.run {
-                        importAlertMessage = "Succès ! \(count) éléments importés."
+                        importAlertMessage = "Succès !\n\(count) éléments importés."
                         showImportAlert = true
                     }
                 } catch {
