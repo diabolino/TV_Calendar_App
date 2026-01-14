@@ -12,7 +12,8 @@ import SwiftData
 @Observable
 class ToWatchViewModel {
     // États de l'interface
-    var displayMode: ToWatchMode = .list
+    // MODIFICATION ICI : .heatmap par défaut au lieu de .list
+    var displayMode: ToWatchMode = .heatmap
     var sortOption: ToWatchSortOption = .dateAsc
     
     enum ToWatchMode: String, CaseIterable {
@@ -22,6 +23,7 @@ class ToWatchViewModel {
     
     // Logique de Filtrage et Tri
     func getSortedShows(from shows: [TVShow]) -> [TVShow] {
+        
         // 1. Filtrer (Garder uniquement ce qui est à voir et sorti)
         let activeShows = shows.filter { hasReleasedUnwatchedEpisodes($0) }
         
@@ -87,7 +89,7 @@ enum ToWatchSortOption: String, CaseIterable {
 
 // --- VUE PRINCIPALE ---
 struct ToWatchView: View {
-    let profileId: String? // NOUVEAU
+    let profileId: String?
     
     @Query var allShows: [TVShow]
     @State private var viewModel = ToWatchViewModel()
@@ -146,7 +148,6 @@ struct ToWatchView: View {
                 
                 // --- CONTENU ---
                 ScrollView {
-                    // Utilisation de myShows filtré
                     let displayShows = viewModel.getSortedShows(from: myShows)
                     
                     if myShows.isEmpty {
@@ -156,19 +157,23 @@ struct ToWatchView: View {
                         
                     } else if displayShows.isEmpty {
                         // CAS 2 : Des séries, mais tout est vu
-                        ContentUnavailableView("Vous êtes à jour !", systemImage: "checkmark.circle", description: Text("Aucun épisode en retard. Les futurs épisodes apparaîtront ici le jour de leur sortie."))
+                        ContentUnavailableView("Vous êtes à jour !", systemImage: "checkmark.circle", description: Text("Aucun épisode en retard.\nLes futurs épisodes apparaîtront ici le jour de leur sortie."))
                             .padding(.top, 50)
                         
                     } else {
                         // CAS 3 : LISTE DES ÉPISODES
                         LazyVStack(spacing: 16) {
                             ForEach(displayShows) { show in
+                                
+                                // === LOGIQUE DE SÉPARATION POSTER / BANNIERE ===
+                                
                                 if viewModel.displayMode == .list {
+                                    // MODE LISTE : On utilise ToWatchCard
                                     if let nextEp = viewModel.nextEpisode(for: show) {
                                         NavigationLink(destination: ShowDetailView(show: show)) {
                                             ToWatchCard(
                                                 showName: show.name,
-                                                imageUrl: show.bannerUrl ?? show.imageUrl,
+                                                imageUrl: show.imageUrl, // <--- POSTER (Vertical)
                                                 episode: nextEp,
                                                 progress: viewModel.progress(for: show)
                                             )
@@ -176,6 +181,7 @@ struct ToWatchView: View {
                                         .buttonStyle(.plain)
                                     }
                                 } else {
+                                    // MODE HEATMAP : On utilise ShowHeatmap
                                     NavigationLink(destination: ShowDetailView(show: show)) {
                                         ShowHeatmap(show: show, episodes: show.episodes ?? [])
                                     }
@@ -196,7 +202,7 @@ struct ToWatchView: View {
     }
 }
 
-// --- CARTE DÉTAILLÉE (C'est elle qui manquait !) ---
+// --- CARTE DÉTAILLÉE (Mode Liste uniquement) ---
 struct ToWatchCard: View {
     let showName: String
     let imageUrl: String?
@@ -206,6 +212,7 @@ struct ToWatchCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
+                // Poster Image (Format Portrait 2:3)
                 PosterImage(urlString: imageUrl, width: 80, height: 120)
                     .cornerRadius(8)
                 
@@ -232,15 +239,13 @@ struct ToWatchCard: View {
                     }
                 }.frame(height: 4)
                 
-                // Dans ToWatchCard (bas du fichier)
-
                 Button(action: {
                     HapticManager.shared.trigger(.medium)
                     
                     // 1. Action Locale
                     withAnimation { episode.toggleWatched() }
                     
-                    // 2. Action Trakt (NOUVEAU)
+                    // 2. Action Trakt
                     if episode.isWatched {
                         print("🚀 ToWatchView: Envoi Trakt pour \(episode.title)")
                         Task {
