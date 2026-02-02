@@ -3,7 +3,7 @@
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 27/11/2025.
-//  Updated for Banner Maintenance Tool (Fixed for upgrade existing banners)
+//  Updated for Banner Maintenance Tool
 //
 
 import SwiftUI
@@ -203,7 +203,7 @@ struct SettingsView: View {
         
         Task {
             do {
-                // 1. Récupérer TOUTES les séries (plus de filtre nil)
+                // 1. Récupérer TOUTES les séries
                 let descriptor = FetchDescriptor<TVShow>()
                 let allShows = try modelContext.fetch(descriptor)
                 
@@ -228,7 +228,7 @@ struct SettingsView: View {
                     // Appel API (fetchShowWithImages inclut les images embed)
                     if let details = try? await TVMazeService.shared.fetchShowWithImages(id: show.tvmazeId) {
                         
-                        [cite_start]// La fonction extractBanner cherche spécifiquement 758x140 en priorité. [cite: 362]
+                        // La fonction extractBanner cherche spécifiquement 758x140 en priorité.
                         if let optimalBanner = TVMazeService.shared.extractBanner(from: details) {
                             
                             // Si l'URL trouvée est différente de l'actuelle (ou si l'actuelle était vide)

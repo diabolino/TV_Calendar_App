@@ -3,18 +3,19 @@
 //  TV_Calendar
 //
 //  Created by Gouard matthieu on 06/12/2025.
-//  Updated for Movies & Multi-User
+//  Updated for CloudKit Sync Fix (Correction .private)
 //
 
 import SwiftData
 import Foundation
 
 struct SharedPersistence {
-    // ⚠️ REMPLACEZ PAR VOTRE VRAI ID APP GROUP SI VOUS L'UTILISEZ
+    // ⚠️ ID APP GROUP
     static let appGroupIdentifier = "group.net.darkdiablo.TVCalendar"
+    // ⚠️ ID ICLOUD (Doit correspondre exactement à vos Entitlements)
+    static let iCloudContainerIdentifier = "iCloud.net.darkdiablo.TVCalendar.v2"
 
     static var sharedModelContainer: ModelContainer = {
-        // AJOUT DES NOUVEAUX MODÈLES ICI 👇
         let schema = Schema([
             UserProfile.self,
             TVShow.self,
@@ -27,10 +28,18 @@ struct SharedPersistence {
         
         if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
             let storeURL = containerURL.appending(path: "TVCalendar.store")
-            modelConfiguration = ModelConfiguration(url: storeURL, allowsSave: true)
+            
+            // CORRECTION : .private nécessite l'ID du container en paramètre
+            modelConfiguration = ModelConfiguration(
+                url: storeURL,
+                allowsSave: true,
+                cloudKitDatabase: .private(iCloudContainerIdentifier)
+            )
         } else {
-            // Fallback (Stockage local standard)
-            modelConfiguration = ModelConfiguration()
+            // Fallback (Stockage local par défaut si pas d'App Group trouvé)
+            modelConfiguration = ModelConfiguration(
+                cloudKitDatabase: .private(iCloudContainerIdentifier)
+            )
         }
 
         do {
